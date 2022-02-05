@@ -1,0 +1,48 @@
+---
+- hosts: hw1
+  become: yes
+  vars:
+    server_name: "{{ ansible_default_ipv4_.address }}"
+    document_root: /var/www/html
+    app_root: ~/hw0
+  tasks: 
+    - name: Install nginx
+      apt: 
+        name: nginx
+        state: latest
+        update_cache: yes
+
+    - name: Clone site files
+      git:
+        repo: https://github.com/pollsmor/CSE356.git
+        dest: ~/
+        clone: yes
+        update: yes
+
+    - name: Copy site files to document root
+      copy:
+        src: "{{ app_root }}"
+        dest: "{{ document_root }}"
+        mode: preserve
+
+    - name: Apply Nginx template
+      template:
+        src: ~/hw0/nginx.conf
+        dest: /etc/nginx/sites-available/default
+      notify: Restart Nginx
+
+    - name: Enable new site
+      file:
+        src: /etc/nginx/sites-available/default
+        dest: /etc/nginx/sites-enabled/default
+        state: link
+      notify: Restart Nginx
+
+  handlers:
+    - name: Restart Nginx
+    service:
+      name: nginx
+      state: restarted
+
+    
+    

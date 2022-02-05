@@ -1,7 +1,6 @@
 ---
 - hosts: hw1
   vars:
-    server_name: "{{ ansible_default_ipv4_.address }}"
     document_root: /var/www/html
     app_root: ~/CSE356/hw0
   tasks: 

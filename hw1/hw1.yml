@@ -1,5 +1,6 @@
 ---
 - hosts: hw1
+  become: yes
   vars:
     document_root: /var/www/html
     app_root: ~/CSE356/hw0

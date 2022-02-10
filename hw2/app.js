@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
+const pug = require('pug');
 
 const app = express();
 const port = 3000;
@@ -9,14 +10,21 @@ app.use(express.static('public'));
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+app.set('view engine', 'pug');
+app.set('views', './views');
+
 app.get('/ttt', function (req, res) {
-    res.sendFile(path.join(__dirname, 'routes/index.html'));
+    res.sendFile(path.join(__dirname, 'views/form.html'));
 });
 
 app.post('/', function(req, res) {
-    let name = req.body.name;
-    let date = new Date().toISOString().slice(0, 10);
-    res.send('Hello ' + name + ', ' + date);
+    let locals = {
+        pageTitle: 'Tic-Tac-Toe!',
+        name: req.body.name,
+        date: new Date().toISOString().slice(0, 10)
+    };
+
+    res.render('index', locals);
 });
 
 app.post('/ttt/play', function (req, res) {

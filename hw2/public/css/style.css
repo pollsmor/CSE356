@@ -41,3 +41,37 @@ h1 {
     font-weight: bold;
     font-size: 48px;
 }
+
+.footer {
+    color: yellow;
+    background-color: BlueViolet;
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    text-align: center
+}
+
+.footer li {
+    display: inline-block;
+    text-align: center;
+    vertical-align: middle;
+    margin-left: 4px;
+    margin-right: 4px;
+}
+
+.footer ul {
+    list-style-type: none;
+    margin: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.avatar {
+    float: left;
+    border-radius: 50%;
+    width: 32px;
+    border: 3px solid yellow;
+}

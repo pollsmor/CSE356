@@ -45,13 +45,14 @@ app.post('/ttt/play', function (req, res) {
 
             grid[randIdx] = 'O';
             req.body.grid = grid;
-            if (req.body.winner == ' ')
-                req.body.winner = getWinner(grid);
-                
-            res.json(req.body);
-            return;
+            break;
         }
     }
+
+    if (req.body.winner == ' ')
+        req.body.winner = getWinner(grid);
+        
+    res.json(req.body);
 });
 
 app.listen(port, () => {

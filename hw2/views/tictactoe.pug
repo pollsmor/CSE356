@@ -1,0 +1,36 @@
+doctype html
+html(lang="en")
+  head 
+    meta(charset="utf-8")
+    meta(name="viewport", content="width=device-width, initial-scale=1")
+    style 
+      include ../public/css/style.css
+    title= pageTitle 
+    script(src="https://code.jquery.com/jquery-3.6.0.min.js")
+    script
+      include ../public/js/script.js
+  body 
+    h1 Hello !{name}, !{date}
+    h3 You are playing as X.
+    h3 It is currently <span id="turn">X</span>'s turn.
+    h2 Winner: <span id="winner">
+    div#grid
+      div(id="cell_0" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_1" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_2" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_3" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_4" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_5" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_6" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_7" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+      div(id="cell_8" class="cell" onclick="makeMove(this)")
+        h1.symbol &nbsp
+  

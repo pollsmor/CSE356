@@ -1,0 +1,17 @@
+doctype html
+html(lang="en")
+  head 
+    meta(charset="utf-8")
+    meta(name="viewport", content="width=device-width, initial-scale=1")
+    style 
+      include ../public/css/style.css
+    title= pageTitle 
+  body 
+    h1 Welcome to TeamSoloKid's Warmup Project #1! This is a Tic-Tac-Toe game against a bot.
+    form(role="form", method="POST", action="/ttt/")
+        label(for="name") Name:
+        br
+        input(type="text", name="name")
+        br
+        br
+        input(type="submit", value="Submit")

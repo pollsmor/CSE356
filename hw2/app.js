@@ -11,20 +11,24 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.set('view engine', 'pug');
-app.set('views', './views');
+app.set('views', 'views');
 
-app.get('/ttt', function (req, res) {
-    res.sendFile(path.join(__dirname, 'views/form.html'));
+app.get('/ttt/', function (req, res) {
+    let locals = {
+        pageTitle: 'Warmup Project 1',
+    }
+
+    res.render('form', locals);
 });
 
-app.post('/', function(req, res) {
+app.post('/ttt/', function(req, res) {
     let locals = {
         pageTitle: 'Tic-Tac-Toe!',
         name: req.body.name,
         date: new Date().toISOString().slice(0, 10)
     };
 
-    res.render('index', locals);
+    res.render('tictactoe', locals);
 });
 
 app.post('/ttt/play', function (req, res) {

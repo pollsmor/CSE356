@@ -1,6 +1,6 @@
 function makeMove(e) {
     let str = e.innerText;
-    if (str == String.fromCharCode(160)) { // &nbsp char code
+    if (isSpace(str)) { // &nbsp char code
         let turn = document.getElementById("turn");
         if (turn.innerText != "X") return;
         e.innerHTML = "<h1 class=\"symbol\">X</h1>"
@@ -23,12 +23,21 @@ function makeMove(e) {
                 grid: board
             },
             success: function (data) {
+                // Bot makes (random) move
+                for (var i = 0; i < 9; i++) {
+                    grid[i].innerHTML = "<h1 class=\"symbol\">" + data.grid[i] + "</h1>";
+                }
+
                 document.getElementById("winner").innerText = data.winner;
                 turn.innerText = "X";
             },
             error: function () {
-                alert("Error.");
+                alert("Can't play any more.");
             }
         });
     }
+}
+
+function isSpace(str) {
+    return str === null || str.match(/^ *$/) !== null;
 }

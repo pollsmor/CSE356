@@ -32,8 +32,26 @@ app.post('/ttt/', function(req, res) {
 });
 
 app.post('/ttt/play', function (req, res) {
-    req.body.winner = getWinner(req.body.grid);
-    res.json(req.body);
+    let grid = req.body.grid;
+    req.body.winner = getWinner(grid);
+
+    // Make move
+    for (var i = 0; i < 8; i++) {
+        if (grid[i] == ' ') { // Free spot found
+            let randIdx = getRandomInt(9);
+            while (grid[randIdx] != ' ') {
+                randIdx = getRandomInt(9);
+            }
+
+            grid[randIdx] = 'O';
+            req.body.grid = grid;
+            if (req.body.winner == ' ')
+                req.body.winner = getWinner(grid);
+                
+            res.json(req.body);
+            return;
+        }
+    }
 });
 
 app.listen(port, () => {
@@ -67,4 +85,12 @@ function getWinner(board) {
         return board[2] == 'X' || board[2] == 'O' ? board[2] : ' '; // Diagonal to the left
 
     else return ' ';
+}
+
+function getRandomInt(max) {
+    return Math.floor(Math.random() * max);
+}
+
+function delay(time) {
+    return new Promise(resolve => setTimeout(resolve, time));
 }

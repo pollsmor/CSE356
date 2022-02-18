@@ -31,9 +31,6 @@ function makeMove(e) {
                 document.getElementById("winner").innerText = data.winner;
                 turn.innerText = "X";
             },
-            error: function () {
-                alert("Can't play any more.");
-            }
         });
     }
 }

@@ -1,10 +1,11 @@
 const express = require('express');
-const path = require('path');
 const bodyParser = require('body-parser');
 const pug = require('pug');
+const mongoose = require('mongoose');
 
 const app = express();
 const port = 3000;
+const mongoUri = 'mongodb://localhost:27017/users';
 
 app.use(express.static('public'));
 app.use(express.json());
@@ -12,6 +13,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.set('view engine', 'pug');
 app.set('views', 'views');
+
+mongoose.connect(mongoUri, {
+    useUnifiedTopology: true,
+    useNewUrlParser: true,
+});
+
+mongoose.connection.once('open', function () {
+    console.log('MongoDB database connection established successfully.');
+})
 
 app.get('/ttt/', function (req, res) {
     let locals = {
@@ -21,7 +31,7 @@ app.get('/ttt/', function (req, res) {
     res.render('form', locals);
 });
 
-app.post('/ttt/', function(req, res) {
+app.post('/ttt/', function (req, res) {
     let locals = {
         pageTitle: 'Tic-Tac-Toe!',
         name: req.body.name,
@@ -33,15 +43,14 @@ app.post('/ttt/', function(req, res) {
 
 app.post('/ttt/play', function (req, res) {
     let grid = req.body.grid;
-    req.body.winner = getWinner(grid);
+    req.body.winner = getWinner(grid); 
 
     // Make move
-    for (var i = 0; i < 8; i++) {
+    let randIdx = getRandomInt(9);
+    for (let i = 0; i < 8; i++) {
         if (grid[i] == ' ') { // Free spot found
-            let randIdx = getRandomInt(9);
-            while (grid[randIdx] != ' ') {
+            while (grid[randIdx] != ' ')
                 randIdx = getRandomInt(9);
-            }
 
             grid[randIdx] = 'O';
             req.body.grid = grid;
@@ -49,9 +58,9 @@ app.post('/ttt/play', function (req, res) {
         }
     }
 
-    if (req.body.winner == ' ')
+    if (req.body.winner === ' ')
         req.body.winner = getWinner(grid);
-        
+
     res.json(req.body);
 });
 
@@ -59,7 +68,12 @@ app.listen(port, () => {
     console.log('Warmup project 1 listening on port ' + port);
 });
 
-// =======================================================
+// User creation system ======================================================
+app.post('/adduser', function (req, res) {
+
+});
+
+// Helper functions ==========================================================
 function getWinner(board) {
     if (board[0] == board[1] && board[1] == board[2])
         return board[0] == 'X' || board[0] == 'O' ? board[0] : ' '; // First row

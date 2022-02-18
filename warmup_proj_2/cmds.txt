@@ -1,0 +1,19 @@
+Inside this directory:
+
+apt install nginx
+apt install npm
+
+npm install express --save
+npm install pug --save
+npm install mongoose --save
+
+// Upgrade Node to latest version (needed for Mongoose)
+npm install -g n
+n stable
+
+cp server.conf /etc/nginx/sites-available/
+ln /etc/nginx/sites-available/server.conf /etc/nginx/sites-enabled
+rm /etc/nginx/sites-enabled/default
+systemctl restart nginx
+
+Install MongoDB: https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/

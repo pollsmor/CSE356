@@ -2,10 +2,11 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const pug = require('pug');
 const mongoose = require('mongoose');
+const User = require('./model');
 
 const app = express();
 const port = 3000;
-const mongoUri = 'mongodb://localhost:27017/users';
+const mongoUri = 'mongodb://localhost:27017/tictactoe';
 
 app.use(express.static('public'));
 app.use(express.json());
@@ -19,7 +20,8 @@ mongoose.connect(mongoUri, {
     useNewUrlParser: true,
 });
 
-mongoose.connection.once('open', function () {
+const conn = mongoose.connection;
+conn.once('open', function () {
     console.log('MongoDB database connection established successfully.');
 })
 
@@ -70,7 +72,19 @@ app.listen(port, () => {
 
 // User creation system ======================================================
 app.post('/adduser', function (req, res) {
+    let user = new User({
+        username: req.body.username,
+        password: req.body.password,
+        email: req.body.email,
+        verified: false,
+        key: 'abracadabra',
+        games: []
+    });
 
+    user.save(function (err, user) {
+        if (err) return console.error(err);
+        console.log(user.username + " saved to Users collection.");
+    });
 });
 
 // Helper functions ==========================================================

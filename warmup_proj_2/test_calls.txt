@@ -1,0 +1,3 @@
+curl -X POST -H "Content-Type: application/json" -d '{ "username": "testUser", "password": "hunter13", "email": "notmysbuaddress@stonybrook.edu", "games": []}' http://209.151.151.22/adduser
+
+http://209.151.151.22/verify?email=notmysbuaddress@stonybrook.edu&key=abracadabra

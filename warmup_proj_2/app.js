@@ -7,6 +7,7 @@ const User = require('./model');
 const app = express();
 const port = 3000;
 const mongoUri = 'mongodb://localhost:27017/tictactoe';
+const header = { 'X-CSE356': '61f9f57773ba724f297db6bf' };
 
 app.use(express.static('public'));
 app.use(express.json());
@@ -83,13 +84,35 @@ app.post('/adduser', async function (req, res) {
 
     const usernameExists = await User.exists({ username: user.username });
     const emailExists = await User.exists({ email: user.email });
-    if (usernameExists || emailExists) res.sendStatus(409); // Conflict
+    if (usernameExists || emailExists) {
+        res.writeHead(409, header); // Conflict
+        res.end("Username or email already exists.");
+    }
     else {
         user.save(function (err, user) {
-            if (err) return console.error(err);
-            console.log(user.username + " saved to Users collection.");
-            res.sendStatus(201);
+            res.writeHead(201, header); // Resource created
+            res.end(user.username + " has been created.");
         });
+    }
+});
+
+app.get('/verify', function (req, res) {
+    if (req.query.key === 'abracadabra') {
+        User.updateOne(
+            { email: req.query.email }, // filter
+            { verified: true }, // update
+            function (err, user) {
+            if (user.matchedCount === 0) {
+                res.writeHead(400, header); // Bad request
+                res.end("Email not found.");
+            } else {
+                res.writeHead(202, header); // Accepted
+                res.end(req.query.email + " verified!");
+            }
+        });
+    } else {
+        res.writeHead(400, header); // Bad request
+        res.end("Wrong key for email verification.");
     }
 });
 

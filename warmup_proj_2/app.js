@@ -71,7 +71,7 @@ app.listen(port, () => {
 });
 
 // User creation system ======================================================
-app.post('/adduser', function (req, res) {
+app.post('/adduser', async function (req, res) {
     let user = new User({
         username: req.body.username,
         password: req.body.password,
@@ -81,10 +81,16 @@ app.post('/adduser', function (req, res) {
         games: []
     });
 
-    user.save(function (err, user) {
-        if (err) return console.error(err);
-        console.log(user.username + " saved to Users collection.");
-    });
+    const usernameExists = await User.exists({ username: user.username });
+    const emailExists = await User.exists({ email: user.email });
+    if (usernameExists || emailExists) res.sendStatus(409); // Conflict
+    else {
+        user.save(function (err, user) {
+            if (err) return console.error(err);
+            console.log(user.username + " saved to Users collection.");
+            res.sendStatus(201);
+        });
+    }
 });
 
 // Helper functions ==========================================================

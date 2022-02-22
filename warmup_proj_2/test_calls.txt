@@ -1,3 +1,13 @@
-curl -X POST -H "Content-Type: application/json" -d '{ "username": "testUser", "password": "hunter13", "email": "notmysbuaddress@stonybrook.edu", "games": []}' http://209.151.151.22/adduser
+adduser:
+curl -X POST -H "Content-Type: application/json" -d '{ "username": "testUser", "password": "hunter13", "email": "notmysbuaddress@stonybrook.edu", "games": [] }' http://152.44.35.64/adduser
 
-http://209.151.151.22/verify?email=notmysbuaddress@stonybrook.edu&key=abracadabra
+verify:
+http://152.44.35.64/verify?email=notmysbuaddress@stonybrook.edu&key=abracadabra
+http://152.44.35.64/verify?email=mysbuaddress@stonybrook.edu&key=abracadabra
+
+login: 
+curl -b cookie.txt -c cookie.txt -X POST -H "Content-Type: application/json" -d '{ "username": "testUser", "password": "hunter13" }' http://152.44.35.64/login
+curl -b cookie.txt -c cookie.txt -X POST http://152.44.35.64/login
+
+logout: 
+curl -b cookie.txt -c cookie.txt -X POST http://152.44.35.64/logout

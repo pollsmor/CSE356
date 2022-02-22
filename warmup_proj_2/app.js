@@ -1,7 +1,12 @@
+process.on('SIGINT', function() {
+    process.exit(0);
+});
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const pug = require('pug');
 const mongoose = require('mongoose');
+const session = require('express-session');
 const User = require('./model');
 
 const app = express();
@@ -25,6 +30,12 @@ const conn = mongoose.connection;
 conn.once('open', function () {
     console.log('MongoDB database connection established successfully.');
 })
+
+app.use(session({
+    secret: 'i-dont-care',
+    resave: true,
+    saveUninitialized: true,
+}));
 
 app.get('/ttt/', function (req, res) {
     let locals = {
@@ -115,6 +126,35 @@ app.get('/verify', function (req, res) {
         res.end("Wrong key for email verification.");
     }
 });
+
+app.post('/login', async function (req, res) {
+    // Session found
+    if (req.session.username) {
+        res.writeHead(200, header); // Success
+        res.end(req.session.username + " is logged in.");
+    } else { // Try to log in with provided credentials
+        let user = await User.findOne({ username: req.body.username });
+        if (!user || !user.verified || req.body.password !== user.password) {
+            res.writeHead(403, header); // Forbidden b/c not verified or wrong credentials
+            res.end("Wrong credentials, or user is not verified.");
+        } else {
+            req.session.username = req.body.username;
+            res.writeHead(200, header); // Success
+            res.end(req.session.username + " is logged in.");
+        }
+    }
+});
+
+app.post('/logout', function (req, res) {
+    if (req.session.username) {
+        req.session.destroy();
+        res.writeHead(200, header); // Success
+        res.end("Logged out.");
+    } else {
+        res.writeHead(400, header); // Bad request
+        res.end("Already logged out.");
+    }
+})
 
 // Helper functions ==========================================================
 function getWinner(board) {

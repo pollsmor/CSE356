@@ -1,6 +1,7 @@
 Setup web server: 
 - Install Node.js: https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
 $ npm install express
+$ npm install amqplib
 $ apt install nginx
 $ cp server.conf /etc/nginx/sites-available/
 $ ln /etc/nginx/sites-available/server.conf /etc/nginx/sites-enabled
@@ -9,6 +10,8 @@ $ systemctl restart nginx
 
 Reading: 
 - https://www.rabbitmq.com/tutorials/amqp-concepts.html
+- https://www.rabbitmq.com/tutorials/tutorial-one-javascript.html
+- Exclusive: https://www.rabbitmq.com/tutorials/tutorial-three-javascript.html
 
 Setup RabbitMQ:
 $ source install.sh

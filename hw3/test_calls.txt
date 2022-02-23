@@ -1,5 +1,5 @@
 listen:
-curl -X POST -H "Content-Type: application/json" -d '{ keys: ["a", "b", "c"] }' http://152.44.35.64/listen
+curl -X POST -H "Content-Type: application/json" -d '{ "keys": ["a", "b", "c"] }' http://152.44.35.64/listen
 
 speak:
-curl -X POST -H "Content-Type: application/json" -d '{ key: "a", msg: "Hello world!" }' http://152.44.35.64/speak
+curl -X POST -H "Content-Type: application/json" -d '{ "key": "a", "msg": "Hello world!" }' http://152.44.35.64/speak

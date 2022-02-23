@@ -1,20 +1,14 @@
-Setup web server: 
+Setup web server:
 - Install Node.js: https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
 $ npm install express
+$ npm install pug
+$ npm install mongoose
+$ npm install express-session
 $ apt install nginx
 $ cp server.conf /etc/nginx/sites-available/
 $ ln /etc/nginx/sites-available/server.conf /etc/nginx/sites-enabled
 $ rm /etc/nginx/sites-enabled/default
 $ systemctl restart nginx
 
-Reading: 
-- https://www.rabbitmq.com/tutorials/amqp-concepts.html
-
-Setup RabbitMQ:
-$ source install.sh
-$ rabbitmq-plugins enable rabbitmq_management
-$ rabbitmqctl set_permissions -p / admin '.*' '.*' '.*'
-$ ufw allow 15672
-- Link: http://152.44.35.64:15672
-- Username: admin
-- Password: password
+Install MongoDB: 
+- https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/

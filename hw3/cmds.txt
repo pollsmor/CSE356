@@ -1,0 +1,12 @@
+Inside this directory:
+
+Install Node.js: https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
+
+npm install express
+
+apt install nginx
+
+cp server.conf /etc/nginx/sites-available/
+ln /etc/nginx/sites-available/server.conf /etc/nginx/sites-enabled
+rm /etc/nginx/sites-enabled/default
+systemctl restart nginx

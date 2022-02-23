@@ -1,0 +1,9 @@
+https://www.rabbitmq.com/tutorials/amqp-concepts.html
+
+$ rabbitmq-plugins enable rabbitmq_management
+$ rabbitmqctl set_permissions -p / admin '.*' '.*' '.*'
+$ ufw allow 15672
+
+Link: http://152.44.35.64:15672
+Username: admin
+Password: password

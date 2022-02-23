@@ -11,3 +11,6 @@ curl -b cookie.txt -c cookie.txt -X POST http://152.44.35.64/login
 
 logout: 
 curl -b cookie.txt -c cookie.txt -X POST http://152.44.35.64/logout
+
+ttt/play:
+curl -b cookie.txt -c cookie.txt -X POST -H "Content-Type: application/json" -d '{ "move": 0 }' http://152.44.35.64/ttt/play

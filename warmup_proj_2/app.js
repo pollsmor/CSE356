@@ -1,10 +1,6 @@
-process.on('SIGINT', function() {
-    process.exit(0);
-});
-
 const express = require('express');
-const bodyParser = require('body-parser');
 const pug = require('pug');
+const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const User = require('./model');
@@ -20,24 +16,27 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.set('view engine', 'pug');
 app.set('views', 'views');
-
-mongoose.connect(mongoUri, {
-    useUnifiedTopology: true,
-    useNewUrlParser: true,
-});
-
-const conn = mongoose.connection;
-conn.once('open', function () {
-    console.log('MongoDB database connection established successfully.');
-})
-
 app.use(session({
     secret: 'i-dont-care',
     resave: true,
     saveUninitialized: true,
 }));
 
-app.get('/ttt/', function (req, res) {
+mongoose.connect(mongoUri, {
+    useUnifiedTopology: true,
+    useNewUrlParser: true,
+});
+const conn = mongoose.connection;
+conn.once('open', function () {
+    console.log('MongoDB database connection established successfully.');
+})
+
+app.listen(port, () => {
+    console.log('Warmup project 1 listening on port ' + port);
+});
+
+// Routes ====================================================================
+app.get('/ttt/', function (req, res) { // Not used for warmup project 2
     let locals = {
         pageTitle: 'Warmup Project 1',
     }
@@ -55,34 +54,72 @@ app.post('/ttt/', function (req, res) {
     res.render('tictactoe', locals);
 });
 
-app.post('/ttt/play', function (req, res) {
-    let grid = req.body.grid;
-    req.body.winner = getWinner(grid); 
+app.post('/ttt/play', async function (req, res) {
+    // Session found
+    if (req.session.username) {
+        let move = Number(req.body.move); // In case move is a string number
+        let user = await User.findOne({ username: req.session.username });
+        let grid = user.games[user.games.length - 1];
+        // Move = null or invalid
+        if (move == null || move < 0 || move > 8 || grid[move] !== ' ') { 
+            res.json({ grid: grid, winner: ' ', 'X-CSE356': '61f9f57773ba724f297db6bf' });
+        } else { // Move is actually made
+            User.update(
+                { "_id": user._id },
+                { $set: { "games.$[move].value": 'X' }},
+                function (err, user) {}
+            );
 
-    // Make move
-    let randIdx = getRandomInt(9);
-    for (let i = 0; i < 8; i++) {
-        if (grid[i] == ' ') { // Free spot found
-            while (grid[randIdx] != ' ')
-                randIdx = getRandomInt(9);
+            grid[move] = 'X';
+            let winner = getWinner(grid);
+            let drew = true;
+            if (winner === ' ') { // No winner yet
+                for (let i = 0; i < 8; i++)
+                    if (grid[i] === ' ') // Free spot found
+                        drew = false;
 
-            grid[randIdx] = 'O';
-            req.body.grid = grid;
-            break;
+                if (!drew) { // Let bot make move
+                    let randIdx = getRandomInt(9);
+                    while (grid[randIdx] !== ' ')
+                        randIdx = getRandomInt(9);
+
+                    User.update(
+                        { "_id": user._id },
+                        { $set: { "games.$[randIdx].value": 'O' }},
+                        function (err, user) {}
+                    );
+
+                    grid[randIdx] = 'O';
+                    winner = getWinner(grid);
+                } else user.ties++;
+            }
+
+            if (winner !== ' ' || drew) { // If game is over, save it
+                if (winner === 'X') user.wins++;
+                else if (winner === 'O') user.losses++;
+
+                User.update
+
+                user.games.push([' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ']);
+            }
+
+            User.update(
+                { username:  req.session.username },
+                {
+                    '$push': { games:  }
+                }
+            ).then(data => {
+                console.log(data);
+            });
+
+            res.json({ grid: grid, winner: winner, 'X-CSE356': '61f9f57773ba724f297db6bf' });
         }
+    } else {
+        res.writeHead(403, header); // Forbidden
+        res.end("You must be logged in to play.");
     }
-
-    if (req.body.winner === ' ')
-        req.body.winner = getWinner(grid);
-
-    res.json(req.body);
 });
 
-app.listen(port, () => {
-    console.log('Warmup project 1 listening on port ' + port);
-});
-
-// User creation system ======================================================
 app.post('/adduser', async function (req, res) {
     let user = new User({
         username: req.body.username,
@@ -90,7 +127,10 @@ app.post('/adduser', async function (req, res) {
         email: req.body.email,
         verified: false,
         key: 'abracadabra',
-        games: []
+        games: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        wins: 0,
+        losses: 0,
+        ties: 0
     });
 
     const usernameExists = await User.exists({ username: user.username });

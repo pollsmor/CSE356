@@ -27,7 +27,7 @@ mongoose.connect(mongoUri, {
 
 mongoose.connection.once('open', function () {});
 app.listen(port, () => {
-    console.log('Warmup project 1 listening on port ' + port);
+    console.log('Warmup project 2 listening on port ' + port);
 });
 
 // Routes ====================================================================
@@ -36,7 +36,7 @@ app.post('/ttt/play', async function (req, res) {
 
     // Session found
     if (req.session.username) {
-        let move = Number(req.body.move); // In case move is a numbered String?
+        let move = req.body.move;
         let user = await User.findOne({ username: req.session.username });
 
         let emptyGame = {
@@ -49,7 +49,7 @@ app.post('/ttt/play', async function (req, res) {
         let grid = user.games[user.games.length - 1].grid;
 
         // Move is null or invalid
-        if (move == null || move < 0 || move > 8 || grid[move] !== ' ') {
+        if (move === 'null' || move < 0 || move > 8 || grid[move] !== ' ') {
             return res.json({ 
                 status: 'OK',
                 grid: grid, 
@@ -122,7 +122,7 @@ app.post('/ttt/play', async function (req, res) {
                 console.log("Game logged to database.");
             });
 
-            res.json({ 
+            return res.json({ 
                 status: 'OK',
                 grid: grid, 
                 winner: winner, 
@@ -131,7 +131,7 @@ app.post('/ttt/play', async function (req, res) {
     } else {
         return res.json({
             status: 'ERROR',
-            grid: null,
+            grid: [],
             winner: ' ',
         });
     }
@@ -151,7 +151,7 @@ app.post('/listgames', async function (req, res) {
     } else {
         return res.json({
             status: 'ERROR',
-            games: null,
+            games: [],
         });
     }
 });
@@ -183,7 +183,7 @@ app.post('/getgame', async function (req, res) {
     } else {
         return res.json({
             status: 'ERROR',
-            grid: null,
+            grid: [],
             winner: ' ',
         });
     }
@@ -195,7 +195,7 @@ app.post('/getscore', async function (req, res) {
     // Session found
     if (req.session.username) {
         let user = await User.findOne({ username: req.session.username });
-        res.json({ 
+        return res.json({ 
             status: 'OK',
             human: user.wins, 
             wopr: user.losses, 

@@ -36,7 +36,7 @@ app.post('/ttt/play', async function (req, res) {
     if (req.session.username) {
         let move = Number(req.body.move); // In case move is a numbered String?
         let user = await User.findOne({ username: req.session.username });
-        let grid = user.games[user.games.length - 1];
+        let grid = user.games[user.games.length - 1].grid;
 
         // Move is null or invalid
         if (move == null || move < 0 || move > 8 || grid[move] !== ' ') {
@@ -47,7 +47,11 @@ app.post('/ttt/play', async function (req, res) {
             });
         } else { // Move is actually made
             let gameEnded = false;
-            let emptyGrid = [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '];
+            let emptyGame = {
+                id: 'g' + user.games.length,
+                grid: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+                start_date: new Date().toISOString().slice(0, 10)
+            };
 
             // User (X) makes move
             grid[move] = 'X';
@@ -56,7 +60,7 @@ app.post('/ttt/play', async function (req, res) {
             if (winner === 'X') { // X has won
                 gameEnded = true;
                 let wins = user.wins;
-                user.games.push(emptyGrid);
+                user.games.push(emptyGame);
                 update['$set'] = { 
                     wins: wins + 1,
                     games: user.games
@@ -66,7 +70,7 @@ app.post('/ttt/play', async function (req, res) {
             } else if (hasTied(grid)) {
                 gameEnded = true;
                 let ties = user.ties;
-                user.games.push(emptyGrid);
+                user.games.push(emptyGame);
                 update['$set'] = { 
                     ties: ties + 1,
                     games: user.games
@@ -85,7 +89,7 @@ app.post('/ttt/play', async function (req, res) {
                 winner = getWinner(grid);
                 if (winner === 'O') { // O has won
                     let losses = user.losses;
-                    user.games.push(emptyGrid);
+                    user.games.push(emptyGame);
                     update['$set'] = { 
                         losses: losses + 1,
                         games: user.games
@@ -94,7 +98,7 @@ app.post('/ttt/play', async function (req, res) {
                     console.log('O has won.');
                 } else if (hasTied(grid)) {
                     let ties = user.ties;
-                    user.games.push(emptyGrid);
+                    user.games.push(emptyGame);
                     update['$set'] = { 
                         ties: ties + 1,
                         games: user.games
@@ -125,6 +129,65 @@ app.post('/ttt/play', async function (req, res) {
     }
 });
 
+app.post('/listgames', async function (req, res) {
+    // Session found
+    if (req.session.username) {
+        let user = await User.findOne({ username: req.session.username });
+        return res.json({ 
+            status: 'OK',
+            games: user.games, 
+            'X-CSE356': '61f9f57773ba724f297db6bf' 
+        });
+    } else {
+        res.writeHead(403, header); // Forbidden
+        res.end("You must be logged in to play.");
+    }
+});
+
+app.post('/getgame', async function (req, res) {
+    // Session found
+    if (req.session.username) {
+        let user = await User.findOne({ username: req.session.username });
+        let grid = null;
+        let winner = ' ';
+
+        for (let game of user.games) {
+            if (game.id === req.body.id) {
+                grid = game.grid;
+                winner = getWinner(grid);
+                break;
+            }
+        }
+
+        return res.json({ 
+            status: 'OK',
+            grid: grid, 
+            winner: winner, 
+            'X-CSE356': '61f9f57773ba724f297db6bf' 
+        });
+    } else {
+        res.writeHead(403, header); // Forbidden
+        res.end("You must be logged in to play.");
+    }
+});
+
+app.post('/getscore', async function (req, res) {
+    // Session found
+    if (req.session.username) {
+        let user = await User.findOne({ username: req.session.username });
+        res.json({ 
+            status: 'OK',
+            human: user.wins, 
+            wopr: user.losses, 
+            tie: user.ties,
+            'X-CSE356': '61f9f57773ba724f297db6bf' 
+        });
+    } else {
+        res.writeHead(403, header); // Forbidden
+        res.end("You must be logged in to play.");
+    }
+});
+
 app.post('/adduser', async function (req, res) {
     let user = new User({
         username: req.body.username,
@@ -132,7 +195,11 @@ app.post('/adduser', async function (req, res) {
         email: req.body.email,
         verified: false,
         key: 'abracadabra',
-        games: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+        games: [{
+            id: 'g0',
+            grid: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+            start_date: new Date().toISOString().slice(0, 10)
+        }],
         wins: 0,
         losses: 0,
         ties: 0
@@ -210,7 +277,7 @@ app.get('/login', function (req, res) {
 app.get('/ttt', async function (req, res) { 
     if (req.session.username) {
         let user = await User.findOne({ username: req.session.username });
-        let grid = user.games[user.games.length - 1];
+        let grid = user.games[user.games.length - 1].grid;
         res.render('tictactoe', {
             grid: grid
         });

@@ -8,7 +8,7 @@ let User = new Schema({
     email:      String,
     verified:   Boolean,
     key:        String,
-    games:      [[Object]],
+    games:      [Object],
     wins:       Number,
     losses:     Number,
     ties:       Number

@@ -6,7 +6,7 @@ const User = require('./model');
 const app = express();
 const port = 3000;
 const mongoUri = 'mongodb://localhost:27017/tictactoe';
-const header = { 'X-CSE356': '61f9f57773ba724f297db6bf' };
+const id = '61f9f57773ba724f297db6bf';
 
 app.set('view engine', 'ejs');
 
@@ -41,9 +41,10 @@ app.post('/ttt/play', async function (req, res) {
         // Move is null or invalid
         if (move == null || move < 0 || move > 8 || grid[move] !== ' ') {
             res.json({ 
+                status: 'OK',
                 grid: grid, 
                 winner: ' ', 
-                'X-CSE356': '61f9f57773ba724f297db6bf' 
+                'X-CSE356': id 
             });
         } else { // Move is actually made
             let gameEnded = false;
@@ -118,14 +119,19 @@ app.post('/ttt/play', async function (req, res) {
             });
 
             res.json({ 
+                status: 'OK',
                 grid: grid, 
                 winner: winner, 
-                'X-CSE356': '61f9f57773ba724f297db6bf' 
+                'X-CSE356': id 
             });
         }   
     } else {
-        res.writeHead(403, header); // Forbidden
-        res.end("You must be logged in to play.");
+        return res.json({
+            status: 'ERROR',
+            grid: null,
+            winner: ' ',
+            'X-CSE356': id 
+        });
     }
 });
 
@@ -136,11 +142,14 @@ app.post('/listgames', async function (req, res) {
         return res.json({ 
             status: 'OK',
             games: user.games, 
-            'X-CSE356': '61f9f57773ba724f297db6bf' 
+            
         });
     } else {
-        res.writeHead(403, header); // Forbidden
-        res.end("You must be logged in to play.");
+        return res.json({
+            status: 'ERROR',
+            games: null,
+            'X-CSE356': id 
+        });
     }
 });
 
@@ -150,24 +159,30 @@ app.post('/getgame', async function (req, res) {
         let user = await User.findOne({ username: req.session.username });
         let grid = null;
         let winner = ' ';
+        let status = 'ERROR';
 
         for (let game of user.games) {
             if (game.id === req.body.id) {
                 grid = game.grid;
                 winner = getWinner(grid);
+                status = 'OK';
                 break;
             }
         }
 
         return res.json({ 
-            status: 'OK',
+            status: status,
             grid: grid, 
             winner: winner, 
-            'X-CSE356': '61f9f57773ba724f297db6bf' 
+            'X-CSE356': id 
         });
     } else {
-        res.writeHead(403, header); // Forbidden
-        res.end("You must be logged in to play.");
+        return res.json({
+            status: 'ERROR',
+            grid: null,
+            winner: ' ',
+            'X-CSE356': id 
+        });
     }
 });
 
@@ -180,11 +195,16 @@ app.post('/getscore', async function (req, res) {
             human: user.wins, 
             wopr: user.losses, 
             tie: user.ties,
-            'X-CSE356': '61f9f57773ba724f297db6bf' 
+            'X-CSE356': id 
         });
     } else {
-        res.writeHead(403, header); // Forbidden
-        res.end("You must be logged in to play.");
+        return res.json({
+            status: 'ERROR',
+            human: 0,
+            wopr: 0,
+            tie: 0,
+            'X-CSE356': id 
+        });
     }
 });
 
@@ -208,13 +228,17 @@ app.post('/adduser', async function (req, res) {
     const usernameExists = await User.exists({ username: user.username });
     const emailExists = await User.exists({ email: user.email });
     if (usernameExists || emailExists) {
-        res.writeHead(409, header); // Conflict
-        res.end("Username or email already exists.");
+        return res.json({
+            status: 'ERROR',
+            'X-CSE356': id 
+        });
     }
     else {
         user.save(function (err, user) {
-            res.writeHead(201, header); // Resource created
-            res.end(user.username + " has been created.");
+            return res.json({
+                status: 'OK',
+                'X-CSE356': id 
+            });
         });
     }
 });
@@ -226,33 +250,45 @@ app.get('/verify', function (req, res) {
             { verified: true }, // update
             function (err, user) {
             if (user.matchedCount === 0) {
-                res.writeHead(400, header); // Bad request
-                res.end("Email not found.");
+                return res.json({
+                    status: 'ERROR',
+                    'X-CSE356': id 
+                });
             } else {
-                res.writeHead(202, header); // Accepted
-                res.end(req.query.email + " verified!");
+                return res.json({
+                    status: 'OK',
+                    'X-CSE356': id 
+                });
             }
         });
     } else {
-        res.writeHead(400, header); // Bad request
-        res.end("Wrong key for email verification.");
+        return res.json({
+            status: 'ERROR',
+            'X-CSE356': id 
+        });
     }
 });
 
 app.post('/login', async function (req, res) {
     // Session found
     if (req.session.username) {
-        res.writeHead(200, header); // Success
-        res.end(req.session.username + " is logged in.");
+        return res.json({
+            status: 'OK',
+            'X-CSE356': id 
+        });
     } else { // Try to log in with provided credentials
         let user = await User.findOne({ username: req.body.username });
         if (!user || !user.verified || req.body.password !== user.password) {
-            res.writeHead(403, header); // Forbidden b/c not verified or wrong credentials
-            res.end("Wrong credentials, or user is not verified.");
+            return res.json({
+                status: 'ERROR',
+                'X-CSE356': id 
+            });
         } else {
             req.session.username = req.body.username;
-            res.writeHead(200, header); // Success
-            res.end(req.session.username + " is logged in.");
+            return res.json({
+                status: 'OK',
+                'X-CSE356': id 
+            });
         }
     }
 });
@@ -260,11 +296,15 @@ app.post('/login', async function (req, res) {
 app.post('/logout', function (req, res) {
     if (req.session.username) {
         req.session.destroy();
-        res.writeHead(200, header); // Success
-        res.end("Logged out.");
+        return res.json({
+            status: 'OK',
+            'X-CSE356': id 
+        });
     } else {
-        res.writeHead(400, header); // Bad request
-        res.end("Already logged out.");
+        return res.json({
+            status: 'ERROR',
+            'X-CSE356': id 
+        });
     }
 })
 
@@ -282,8 +322,10 @@ app.get('/ttt', async function (req, res) {
             grid: grid
         });
     } else {
-        res.writeHead(403, header); // Forbidden
-        res.end("You must be logged in to play.");
+        return res.json({
+            status: 'ERROR',
+            'X-CSE356': id 
+        });
     }
 });
 

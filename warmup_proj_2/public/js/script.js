@@ -5,9 +5,9 @@ for (let i = 0; i < 9; i++)
 
 function makeMove(move) {
     $.ajax({
-        type: "POST",
-        url: "/ttt/play",
-        dataType: "json",
+        type: 'POST',
+        url: '/ttt/play',
+        dataType: 'json',
         data: { move: move },
         success: function (data) {
             // Bot makes (random) move
@@ -15,7 +15,18 @@ function makeMove(move) {
             for (let i = 0; i < grid.length; i++)
                 document.getElementById('cell_' + i).innerText = grid[i];
 
-            document.getElementById("winner").innerText = data.winner;
+            document.getElementById('winner').innerText = data.winner;
+
+            if (data.winner !== ' ') {
+                setTimeout(clearBoard, 3000);
+            }
         },
     });
+}
+
+function clearBoard() {
+    for (let i = 0; i < 9; i++)
+        document.getElementById('cell_' + i).innerText = ' ';
+
+    document.getElementById('winner').innerText = ' ';
 }

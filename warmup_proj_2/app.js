@@ -16,7 +16,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(session({ 
     secret: 'i-dont-care',
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: { sameSite: 'strict' },
 }));
 
 mongoose.connect(mongoUri, {
@@ -33,65 +34,91 @@ app.listen(port, () => {
 app.post('/ttt/play', async function (req, res) {
     // Session found
     if (req.session.username) {
-        let move = Number(req.body.move); // In case move is a string number
+        let move = Number(req.body.move); // In case move is a numbered String?
         let user = await User.findOne({ username: req.session.username });
         let grid = user.games[user.games.length - 1];
-        // Move = null or invalid
-        if (move == null || move < 0 || move > 8 || grid[move] !== ' ') { 
-            res.json({ grid: grid, winner: ' ', 'X-CSE356': '61f9f57773ba724f297db6bf' });
-        } else { // Move is actually made
-            User.update(
-                { "_id": user._id },
-                { $set: { "games.$[move].value": 'X' }},
-                function (err, user) {}
-            );
 
+        // Move is null or invalid
+        if (move == null || move < 0 || move > 8 || grid[move] !== ' ') {
+            res.json({ 
+                grid: grid, 
+                winner: ' ', 
+                'X-CSE356': '61f9f57773ba724f297db6bf' 
+            });
+        } else { // Move is actually made
+            let gameEnded = false;
+            let emptyGrid = [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '];
+
+            // User (X) makes move
             grid[move] = 'X';
             let winner = getWinner(grid);
-            let drew = true;
-            if (winner === ' ') { // No winner yet
-                for (let i = 0; i < 8; i++)
-                    if (grid[i] === ' ') // Free spot found
-                        drew = false;
+            let update = {}; // Update query for Mongoose
+            if (winner === 'X') { // X has won
+                gameEnded = true;
+                let wins = user.wins;
+                user.games.push(emptyGrid);
+                update['$set'] = { 
+                    wins: wins + 1,
+                    games: user.games
+                };
 
-                if (!drew) { // Let bot make move
-                    let randIdx = getRandomInt(9);
-                    while (grid[randIdx] !== ' ')
-                        randIdx = getRandomInt(9);
-
-                    User.update(
-                        { "_id": user._id },
-                        { $set: { "games.$[randIdx].value": 'O' }},
-                        function (err, user) {}
-                    );
-
-                    grid[randIdx] = 'O';
-                    winner = getWinner(grid);
-                } else user.ties++;
+                console.log('X has won.');
+            } else if (hasTied(grid)) {
+                gameEnded = true;
+                let ties = user.ties;
+                user.games.push(emptyGrid);
+                update['$set'] = { 
+                    ties: ties + 1,
+                    games: user.games
+                };
+  
+                winner = 'Tied';
+                console.log('Game tied.');
             }
 
-            if (winner !== ' ' || drew) { // If game is over, save it
-                if (winner === 'X') user.wins++;
-                else if (winner === 'O') user.losses++;
+            if (!gameEnded) { // Bot (O) makes move
+                let randIdx = getRandomInt(9);
+                while (grid[randIdx] !== ' ')
+                    randIdx = getRandomInt(9);
 
-                User.update
+                grid[randIdx] = 'O';
+                winner = getWinner(grid);
+                if (winner === 'O') { // O has won
+                    let losses = user.losses;
+                    user.games.push(emptyGrid);
+                    update['$set'] = { 
+                        losses: losses + 1,
+                        games: user.games
+                };
 
-                user.games.push([' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ']);
-            }
+                    console.log('O has won.');
+                } else if (hasTied(grid)) {
+                    let ties = user.ties;
+                    user.games.push(emptyGrid);
+                    update['$set'] = { 
+                        ties: ties + 1,
+                        games: user.games
+                    };
 
-            /*
-            User.update(
-                { username:  req.session.username },
-                {
-                    '$push': { games:  }
+                    winner = 'Tied';
+                    console.log('Game tied.');
+                } else {
+                    update['$set'] = { games: user.games };
                 }
-            ).then(data => {
-                console.log(data);
-            });
-            */
+            }
 
-            res.json({ grid: grid, winner: winner, 'X-CSE356': '61f9f57773ba724f297db6bf' });
-        }
+            let query = { '_id': user._id };
+            let options = { upsert: true };
+            User.updateOne(query, update, options, function(err, user) {
+                console.log("Game logged to database.");
+            });
+
+            res.json({ 
+                grid: grid, 
+                winner: winner, 
+                'X-CSE356': '61f9f57773ba724f297db6bf' 
+            });
+        }   
     } else {
         res.writeHead(403, header); // Forbidden
         res.end("You must be logged in to play.");
@@ -194,34 +221,41 @@ app.get('/ttt', async function (req, res) {
 });
 
 // Helper functions ==========================================================
-function getWinner(board) {
-    if (board[0] == board[1] && board[1] == board[2])
-        return board[0] == 'X' || board[0] == 'O' ? board[0] : ' '; // First row
+function getWinner(grid) {
+    if (grid[0] == grid[1] && grid[1] == grid[2]) // First row
+        if (grid[0] != ' ') return grid[0];
 
-    else if (board[3] == board[4] && board[4] == board[5])
-        return board[3] == 'X' || board[3] == 'O' ? board[3] : ' '; // Second row
+    if (grid[3] == grid[4] && grid[4] == grid[5]) // Second row
+        if (grid[3] != ' ') return grid[3];
 
-    else if (board[6] == board[7] && board[7] == board[8])
-        return board[6] == 'X' || board[6] == 'O' ? board[6] : ' '; // Third row
+    if (grid[6] == grid[7] && grid[7] == grid[8]) // Third row
+        if (grid[6] != ' ') return grid[6];
 
-    else if (board[0] == board[3] && board[3] == board[6])
-        return board[0] == 'X' || board[0] == 'O' ? board[0] : ' '; // First col
+    if (grid[0] == grid[3] && grid[3] == grid[6]) // First col
+        if (grid[0] != ' ') return grid[0];
 
-    else if (board[1] == board[4] && board[4] == board[7])
-        return board[1] == 'X' || board[1] == 'O' ? board[1] : ' '; // Second col
+    if (grid[1] == grid[4] && grid[4] == grid[7]) // Second col
+        if (grid[1] != ' ') return grid[1];
 
-    else if (board[2] == board[5] && board[5] == board[8])
-        return board[2] == 'X' || board[2] == 'O' ? board[2] : ' '; // Third col
+    if (grid[2] == grid[5] && grid[5] == grid[8]) // Third col
+        if (grid[2] != ' ') return grid[2];
 
-    else if (board[0] == board[4] && board[4] == board[8])
-        return board[0] == 'X' || board[0] == 'O' ? board[0] : ' '; // Diagonal to the right
+    if (grid[0] == grid[4] && grid[4] == grid[8]) // Diagonal to the right
+        if (grid[0] != ' ') return grid[0];
 
-    else if (board[2] == board[4] && board[4] == board[6])
-        return board[2] == 'X' || board[2] == 'O' ? board[2] : ' '; // Diagonal to the left
+    if (grid[2] == grid[4] && grid[4] == grid[6]) // Diagonal to the left
+        if (grid[2] != ' ') return grid[2];
 
-    else return ' ';
+    return ' ';
 }
 
 function getRandomInt(max) {
     return Math.floor(Math.random() * max);
+}
+
+function hasTied(grid) {
+    for (let i = 0; i < 9; i++)
+        if (grid[i] === ' ') return false;
+
+    return true;
 }

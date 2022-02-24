@@ -17,7 +17,7 @@ function makeMove(move) {
 
             document.getElementById('winner').innerText = data.winner;
 
-            if (data.winner !== ' ') {
+            if (data.winner !== ' ' || gridFilled(grid)) {
                 setTimeout(clearBoard, 3000);
             }
         },
@@ -29,4 +29,11 @@ function clearBoard() {
         document.getElementById('cell_' + i).innerText = ' ';
 
     document.getElementById('winner').innerText = ' ';
+}
+
+function gridFilled(grid) {
+    for (let i = 0; i < 9; i++)
+        if (grid[i] === ' ') return false;
+        
+    return true;
 }

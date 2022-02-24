@@ -32,27 +32,31 @@ app.listen(port, () => {
 
 // Routes ====================================================================
 app.post('/ttt/play', async function (req, res) {
+    res.setHeader('X-CSE356', id);
+
     // Session found
     if (req.session.username) {
         let move = Number(req.body.move); // In case move is a numbered String?
         let user = await User.findOne({ username: req.session.username });
+
+        let emptyGame = {
+            id: 'g' + user.games.length,
+            grid: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
+            start_date: new Date().toISOString().slice(0, 10)
+        };
+
+        if (user.games.length === 0) user.games.push(emptyGame);
         let grid = user.games[user.games.length - 1].grid;
 
         // Move is null or invalid
         if (move == null || move < 0 || move > 8 || grid[move] !== ' ') {
-            res.json({ 
+            return res.json({ 
                 status: 'OK',
                 grid: grid, 
                 winner: ' ', 
-                'X-CSE356': id 
             });
         } else { // Move is actually made
             let gameEnded = false;
-            let emptyGame = {
-                id: 'g' + user.games.length,
-                grid: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-                start_date: new Date().toISOString().slice(0, 10)
-            };
 
             // User (X) makes move
             grid[move] = 'X';
@@ -60,8 +64,8 @@ app.post('/ttt/play', async function (req, res) {
             let update = {}; // Update query for Mongoose
             if (winner === 'X') { // X has won
                 gameEnded = true;
-                let wins = user.wins;
                 user.games.push(emptyGame);
+                let wins = user.wins;
                 update['$set'] = { 
                     wins: wins + 1,
                     games: user.games
@@ -70,14 +74,14 @@ app.post('/ttt/play', async function (req, res) {
                 console.log('X has won.');
             } else if (hasTied(grid)) {
                 gameEnded = true;
-                let ties = user.ties;
                 user.games.push(emptyGame);
+                let ties = user.ties;
                 update['$set'] = { 
                     ties: ties + 1,
                     games: user.games
                 };
   
-                winner = 'Tied';
+                winner = ' ';
                 console.log('Game tied.');
             }
 
@@ -89,8 +93,8 @@ app.post('/ttt/play', async function (req, res) {
                 grid[randIdx] = 'O';
                 winner = getWinner(grid);
                 if (winner === 'O') { // O has won
-                    let losses = user.losses;
                     user.games.push(emptyGame);
+                    let losses = user.losses;
                     update['$set'] = { 
                         losses: losses + 1,
                         games: user.games
@@ -98,14 +102,14 @@ app.post('/ttt/play', async function (req, res) {
 
                     console.log('O has won.');
                 } else if (hasTied(grid)) {
-                    let ties = user.ties;
                     user.games.push(emptyGame);
+                    let ties = user.ties;
                     update['$set'] = { 
                         ties: ties + 1,
                         games: user.games
                     };
 
-                    winner = 'Tied';
+                    winner = ' ';
                     console.log('Game tied.');
                 } else {
                     update['$set'] = { games: user.games };
@@ -122,7 +126,6 @@ app.post('/ttt/play', async function (req, res) {
                 status: 'OK',
                 grid: grid, 
                 winner: winner, 
-                'X-CSE356': id 
             });
         }   
     } else {
@@ -130,12 +133,13 @@ app.post('/ttt/play', async function (req, res) {
             status: 'ERROR',
             grid: null,
             winner: ' ',
-            'X-CSE356': id 
         });
     }
 });
 
 app.post('/listgames', async function (req, res) {
+    res.setHeader('X-CSE356', id);
+
     // Session found
     if (req.session.username) {
         let user = await User.findOne({ username: req.session.username });
@@ -148,12 +152,13 @@ app.post('/listgames', async function (req, res) {
         return res.json({
             status: 'ERROR',
             games: null,
-            'X-CSE356': id 
         });
     }
 });
 
 app.post('/getgame', async function (req, res) {
+    res.setHeader('X-CSE356', id);
+
     // Session found
     if (req.session.username) {
         let user = await User.findOne({ username: req.session.username });
@@ -174,19 +179,19 @@ app.post('/getgame', async function (req, res) {
             status: status,
             grid: grid, 
             winner: winner, 
-            'X-CSE356': id 
         });
     } else {
         return res.json({
             status: 'ERROR',
             grid: null,
             winner: ' ',
-            'X-CSE356': id 
         });
     }
 });
 
 app.post('/getscore', async function (req, res) {
+    res.setHeader('X-CSE356', id);
+
     // Session found
     if (req.session.username) {
         let user = await User.findOne({ username: req.session.username });
@@ -195,7 +200,6 @@ app.post('/getscore', async function (req, res) {
             human: user.wins, 
             wopr: user.losses, 
             tie: user.ties,
-            'X-CSE356': id 
         });
     } else {
         return res.json({
@@ -203,23 +207,19 @@ app.post('/getscore', async function (req, res) {
             human: 0,
             wopr: 0,
             tie: 0,
-            'X-CSE356': id 
         });
     }
 });
 
 app.post('/adduser', async function (req, res) {
+    res.setHeader('X-CSE356', id);
     let user = new User({
         username: req.body.username,
         password: req.body.password,
         email: req.body.email,
         verified: false,
         key: 'abracadabra',
-        games: [{
-            id: 'g0',
-            grid: [' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '],
-            start_date: new Date().toISOString().slice(0, 10)
-        }],
+        games: [],
         wins: 0,
         losses: 0,
         ties: 0
@@ -230,20 +230,43 @@ app.post('/adduser', async function (req, res) {
     if (usernameExists || emailExists) {
         return res.json({
             status: 'ERROR',
-            'X-CSE356': id 
         });
     }
     else {
         user.save(function (err, user) {
             return res.json({
                 status: 'OK',
-                'X-CSE356': id 
             });
         });
     }
 });
 
+app.post('/verify', function (req, res) {
+    res.setHeader('X-CSE356', id);
+    if (req.body.key === 'abracadabra') {
+        User.updateOne(
+            { email: req.body.email }, // filter
+            { verified: true }, // update
+            function (err, user) {
+            if (user.matchedCount === 0) {
+                return res.json({
+                    status: 'ERROR',
+                });
+            } else {
+                return res.json({
+                    status: 'OK',
+                });
+            }
+        });
+    } else {
+        return res.json({
+            status: 'ERROR',
+        });
+    }
+});
+
 app.get('/verify', function (req, res) {
+    res.setHeader('X-CSE356', id);
     if (req.query.key === 'abracadabra') {
         User.updateOne(
             { email: req.query.email }, // filter
@@ -252,58 +275,55 @@ app.get('/verify', function (req, res) {
             if (user.matchedCount === 0) {
                 return res.json({
                     status: 'ERROR',
-                    'X-CSE356': id 
                 });
             } else {
                 return res.json({
                     status: 'OK',
-                    'X-CSE356': id 
                 });
             }
         });
     } else {
         return res.json({
             status: 'ERROR',
-            'X-CSE356': id 
         });
     }
 });
 
 app.post('/login', async function (req, res) {
+    res.setHeader('X-CSE356', id);
+
     // Session found
     if (req.session.username) {
         return res.json({
             status: 'OK',
-            'X-CSE356': id 
         });
     } else { // Try to log in with provided credentials
         let user = await User.findOne({ username: req.body.username });
         if (!user || !user.verified || req.body.password !== user.password) {
             return res.json({
                 status: 'ERROR',
-                'X-CSE356': id 
             });
         } else {
             req.session.username = req.body.username;
             return res.json({
                 status: 'OK',
-                'X-CSE356': id 
             });
         }
     }
 });
 
 app.post('/logout', function (req, res) {
+    res.setHeader('X-CSE356', id);
+
+    // Session found
     if (req.session.username) {
         req.session.destroy();
         return res.json({
             status: 'OK',
-            'X-CSE356': id 
         });
     } else {
         return res.json({
             status: 'ERROR',
-            'X-CSE356': id 
         });
     }
 })
@@ -315,6 +335,7 @@ app.get('/login', function (req, res) {
 });
 
 app.get('/ttt', async function (req, res) { 
+    // Session found
     if (req.session.username) {
         let user = await User.findOne({ username: req.session.username });
         let grid = user.games[user.games.length - 1].grid;
@@ -324,7 +345,6 @@ app.get('/ttt', async function (req, res) {
     } else {
         return res.json({
             status: 'ERROR',
-            'X-CSE356': id 
         });
     }
 });
@@ -363,6 +383,13 @@ function getRandomInt(max) {
 }
 
 function hasTied(grid) {
+    for (let i = 0; i < 9; i++)
+        if (grid[i] === ' ') return false;
+
+    return true;
+}
+
+function gridFilled(grid) {
     for (let i = 0; i < 9; i++)
         if (grid[i] === ' ') return false;
 

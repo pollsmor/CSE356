@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <meta charset="utf-8">
+      <meta name="viewport", content="width=device-width, initial-scale=1">
+      <link href="/css/style.css" rel="stylesheet" type="text/css">
+      <title>WP2 Frontend</title>
+  </head>
+  <body>
+    <h1>Frontend for testing WP2</h1>
+    <h3>You are playing as X.</h3>
+    <h2>Winner: <span id="winner"></span></h2>
+    <div id="grid">
+      <%- include('partials/grid'); %>
+    </div>
+
+    <footer class="footer">
+      <ul>
+        <li><img class="avatar" src="img/Snowy.png"></li>
+        <li><h4>Kevin Li</h4></li>
+      </ul>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="js/script.js"></script>
+  </body>
+</html>

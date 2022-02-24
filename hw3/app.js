@@ -34,7 +34,7 @@ app.post('/listen', function (req, res) {
 
                 channel.consume(q.queue, function(msg) {
                     if (msg.content) {
-                        console.log("%s", msg.content.toString());
+                        console.log("Message read: %s", msg.content.toString());
                         res.json({ msg: msg.content.toString() });
                     }
 
@@ -49,23 +49,23 @@ app.post('/listen', function (req, res) {
 
 app.post('/speak', function (req, res) {
     amqp.connect('amqp://localhost', function(error0, connection) {
-    if (error0) throw error0;
-    connection.createChannel(function(error1, channel) {
-        if (error1) throw error1;
-        let exchange = 'hw3';
-        let key = req.body.key;
-        let msg = req.body.msg;
-        channel.assertExchange(exchange, 'direct', {
-            durable: true
+        if (error0) throw error0;
+        connection.createChannel(function(error1, channel) {
+            if (error1) throw error1;
+            let exchange = 'hw3';
+            let key = req.body.key;
+            let msg = req.body.msg;
+            channel.assertExchange(exchange, 'direct', {
+                durable: true
+            });
+
+            channel.publish(exchange, key, Buffer.from(msg));
+            console.log("Sent {%s} to %s with key %s", msg, exchange, key);
         });
 
-        channel.publish(exchange, key, Buffer.from(msg));
-        console.log("Sent {%s} to %s with key %s", msg, exchange, key);
+        setTimeout(function() {
+            connection.close();
+            res.end("Message sent.");
+        }, 500)
     });
-
-    setTimeout(function() {
-        connection.close();
-        res.end("Message sent.");
-    }, 500)
-});
 });

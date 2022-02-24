@@ -1,6 +1,4 @@
 const express = require('express');
-const pug = require('pug');
-const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const User = require('./model');
@@ -10,50 +8,28 @@ const port = 3000;
 const mongoUri = 'mongodb://localhost:27017/tictactoe';
 const header = { 'X-CSE356': '61f9f57773ba724f297db6bf' };
 
+app.set('view engine', 'ejs');
+
 app.use(express.static('public'));
 app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-app.set('view engine', 'pug');
-app.set('views', 'views');
-app.use(session({
+app.use(express.urlencoded({ extended: true }));
+app.use(session({ 
     secret: 'i-dont-care',
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false
 }));
 
 mongoose.connect(mongoUri, {
     useUnifiedTopology: true,
     useNewUrlParser: true,
 });
-const conn = mongoose.connection;
-conn.once('open', function () {
-    console.log('MongoDB database connection established successfully.');
-})
 
+mongoose.connection.once('open', function () {});
 app.listen(port, () => {
     console.log('Warmup project 1 listening on port ' + port);
 });
 
 // Routes ====================================================================
-app.get('/ttt/', function (req, res) { // Not used for warmup project 2
-    let locals = {
-        pageTitle: 'Warmup Project 1',
-    }
-
-    res.render('form', locals);
-});
-
-app.post('/ttt/', function (req, res) {
-    let locals = {
-        pageTitle: 'Tic-Tac-Toe!',
-        name: req.body.name,
-        date: new Date().toISOString().slice(0, 10)
-    };
-
-    res.render('tictactoe', locals);
-});
-
 app.post('/ttt/play', async function (req, res) {
     // Session found
     if (req.session.username) {
@@ -103,6 +79,7 @@ app.post('/ttt/play', async function (req, res) {
                 user.games.push([' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ']);
             }
 
+            /*
             User.update(
                 { username:  req.session.username },
                 {
@@ -111,6 +88,7 @@ app.post('/ttt/play', async function (req, res) {
             ).then(data => {
                 console.log(data);
             });
+            */
 
             res.json({ grid: grid, winner: winner, 'X-CSE356': '61f9f57773ba724f297db6bf' });
         }
@@ -195,6 +173,25 @@ app.post('/logout', function (req, res) {
         res.end("Already logged out.");
     }
 })
+
+// Frontend for testing ======================================================
+// Requires having manually created account via cURL / Postman
+app.get('/login', function (req, res) { 
+    res.render('login');
+});
+
+app.get('/ttt', async function (req, res) { 
+    if (req.session.username) {
+        let user = await User.findOne({ username: req.session.username });
+        let grid = user.games[user.games.length - 1];
+        res.render('tictactoe', {
+            grid: grid
+        });
+    } else {
+        res.writeHead(403, header); // Forbidden
+        res.end("You must be logged in to play.");
+    }
+});
 
 // Helper functions ==========================================================
 function getWinner(board) {

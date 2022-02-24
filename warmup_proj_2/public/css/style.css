@@ -13,8 +13,11 @@ h1 {
     width: 100px;
     height: 100px;
     border: 3px solid black;
-    align-items: center;
-    justify-content: center;
+    display: flex; /* Allow centering */
+    align-items: center; /* Center horizontally */
+    justify-content: center; /* Center vertically */
+    font-size: 48px;
+    font-weight: bold;
 }
 
 #cell_0, #cell_1, #cell_2 {
@@ -33,15 +36,6 @@ h1 {
     border-right: none;
 }
 
-.symbol {
-    position: relative;
-    bottom: 10px;
-    text-align: center;
-    color: black;
-    font-weight: bold;
-    font-size: 48px;
-}
-
 .footer {
     color: yellow;
     background-color: BlueViolet;
@@ -49,12 +43,11 @@ h1 {
     left: 0;
     bottom: 0;
     width: 100%;
-    text-align: center
+    text-align: center;
 }
 
 .footer li {
     display: inline-block;
-    text-align: center;
     vertical-align: middle;
     margin-left: 4px;
     margin-right: 4px;
@@ -63,10 +56,6 @@ h1 {
 .footer ul {
     list-style-type: none;
     margin: 0;
-    padding-left: 4px;
-    padding-right: 4px;
-    padding-top: 0;
-    padding-bottom: 0;
 }
 
 .avatar {

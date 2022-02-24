@@ -1,7 +1,7 @@
 Setup web server:
 - Install Node.js: https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
 $ npm install express
-$ npm install pug
+$ npm install ejs
 $ npm install mongoose
 $ npm install express-session
 $ apt install nginx

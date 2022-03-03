@@ -1,0 +1,11 @@
+version: '3'
+services:
+    my_mongo:
+        image: mongo 
+        ports:
+            - 27017:27017
+
+    mongo_seeder:
+        image: mongo_seeder
+        depends_on:
+            - my_mongo

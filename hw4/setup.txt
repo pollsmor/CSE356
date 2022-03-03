@@ -1,0 +1,12 @@
+Docker setup
+- Install Docker: https://docs.docker.com/engine/install/ubuntu/
+$ apt install docker-compose
+
+hw0-container:
+$ docker build -t nginx .
+$ docker run --name hw0 -p 80:80 nginx
+
+hw2-container:
+$ git clone https://github.com/factbook/factbook.json.git
+$ docker build -t mongo_seeder .
+$ docker-compose up -d

@@ -1,0 +1,8 @@
+Setup web server: 
+$ apt install nginx
+$ cp load-balancer.conf /etc/nginx/conf.d/load-balancer.conf
+$ rm /etc/nginx/sites-enabled/default
+$ systemctl restart nginx
+
+Reading: 
+- https://upcloud.com/community/tutorials/configure-load-balancing-nginx/

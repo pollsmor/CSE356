@@ -1,4 +1,5 @@
 const express = require('express');
+const ejs = require('ejs');
 const ShareDB = require('sharedb');
 const mongodb = require('mongodb').MongoClient;
 const db = require('sharedb-mongo')({mongo: function(callback) {
@@ -21,5 +22,7 @@ app.listen(port, () => {
 
 // Routes ====================================================================
 app.get('/', function (req, res) {
-    res.end('Hello world!');
+    res.render('index', {
+        
+    });
 });

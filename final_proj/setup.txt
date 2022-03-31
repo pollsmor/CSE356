@@ -1,0 +1,17 @@
+Install Node.js: 
+- https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
+
+$ apt install nginx
+
+$ npm install -g nodemon
+$ npm install express
+$ npm install sharedb
+$ npm install mongodb
+$ npm install sharedb-mongo
+$ npm install ejs
+
+Setup NGINX:
+$ cp server.conf /etc/nginx/sites-available/
+$ ln /etc/nginx/sites-available/server.conf /etc/nginx/sites-enabled
+$ rm /etc/nginx/sites-enabled/default
+$ systemctl restart nginx

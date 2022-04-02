@@ -6,6 +6,9 @@ $ apt install nginx
 $ npm install -g nodemon
 $ npm install express
 $ npm install sharedb
+$ npm install ws
+$ npm install @teamwork/websocket-json-stream
+$ npm install rich-text
 
 Setup NGINX:
 $ cp server.conf /etc/nginx/sites-available/

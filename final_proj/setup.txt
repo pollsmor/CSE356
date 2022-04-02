@@ -9,6 +9,7 @@ $ npm install sharedb
 $ npm install mongodb
 $ npm install sharedb-mongo
 $ npm install ejs
+$ npm install quill
 
 Setup NGINX:
 $ cp server.conf /etc/nginx/sites-available/

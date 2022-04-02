@@ -1,28 +1,23 @@
 const express = require('express');
-const ejs = require('ejs');
 const ShareDB = require('sharedb');
-const mongodb = require('mongodb').MongoClient;
-const db = require('sharedb-mongo')({mongo: function(callback) {
-    mongodb.connect('mongodb://localhost:27017/final', callback);
-}});
 
 const app = express();
-const port = 3000;
-const backend = new ShareDB({db});
-
-app.set('view engine', 'ejs');
+const backend = new ShareDB();
 
 app.use(express.static('public'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-app.listen(port, () => {
-    console.log('Final project listening on port ' + port);
+app.listen(3000, () => {
+    console.log('Final project listening on port 3000');
 });
 
 // Routes ====================================================================
+
+// Frontend
 app.get('/', function (req, res) {
-    res.render('index', {
-        
-    });
+    res.sendFile(__dirname + '/index.html');
+});
+
+app.get('/connect/:id', function (req, res) {
+    let id = req.params.id;
+    res.json({lmao: 'wtf'});
 });

@@ -1,7 +1,7 @@
 const randString = 'abcdefghijklmnopqrstuvwxyz';
 const ops = []; // Array of oplists
-let opsChanged = false; // If true and timer <= 0, POST changes
-let timer = 3;
+let timer = 1;
+let isFirstMessage = true;
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {
@@ -22,20 +22,20 @@ axios.get(`/connect/${id}`)
 
 // Queue up changes to ops array
 quill.on('text-change', function(delta, oldDelta, source) {
-  ops.push(delta.ops);
-  opsChanged = true;
+  if (source === 'user') {
+    ops.push(delta.ops);
+  }
 });
 
-// Only send ops every 3 seconds
+// Only send ops every second
 setInterval(function() {
-  if (timer <= 0 && opsChanged) {
-    axios.post(`/op/${id}`, {
-      'content': ops
-    });
-
+  if (timer <= 0 && ops.length > 0) {
+    let opsCopy = Array.from(ops);
     ops.length = 0;
-    opsChanged = false;
-    timer = 3;
+    axios.post(`/op/${id}`, opsCopy)
+      .then(function () {
+      timer = 1;
+    });
   }
 
   timer--; // Decrement timer every second
@@ -43,8 +43,16 @@ setInterval(function() {
 
 const stream = new EventSource(`/connect/${id}`);
 stream.addEventListener('message', message => {
-  const oplist = JSON.parse(message.data);
-  console.log(oplist);
+  const oplists = JSON.parse(message.data);
+  if (isFirstMessage) {
+    const oplist = oplists.content;
+    isFirstMessage = false;
+    quill.setContents(oplist);
+  } else {
+    for (let oplist of oplists) {
+      quill.updateContents(oplist);
+    }
+  }
 })
 
 addEventListener('beforeunload', () => {

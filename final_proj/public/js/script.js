@@ -17,7 +17,8 @@ function getRandomId() {
 
 // Open connection to server
 const id = getRandomId();
-axios.get(`/connect/${id}`);
+axios.get(`/connect/${id}`)
+  .catch(function (err) {});
 
 // Queue up changes to ops array
 quill.on('text-change', function(delta, oldDelta, source) {
@@ -42,5 +43,10 @@ setInterval(function() {
 
 const stream = new EventSource(`/connect/${id}`);
 stream.addEventListener('message', message => {
-  console.log(message);
+  const oplist = JSON.parse(message.data);
+  console.log(oplist);
+})
+
+addEventListener('beforeunload', () => {
+  stream.close();
 })

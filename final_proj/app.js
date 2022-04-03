@@ -10,7 +10,6 @@ ShareDB.types.register(require('rich-text').type);
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server: server });
-
 const backend = new ShareDB();
 const connection = backend.connect();
 wss.on('connection', (ws) => {
@@ -18,7 +17,12 @@ wss.on('connection', (ws) => {
     backend.listen(stream);
 });
 
-const doc = connection.get('documents', 'firstDocument');
+const doc = connection.get('docs', 'doc1');
+const ops = []; // Array of oplists to send back
+doc.on('op', function (op, source) {
+    ops.push(op);
+});
+
 const streamHeaders = {
     'Content-Type': 'text/event-stream',
     'Connection': 'keep-alive',
@@ -38,33 +42,24 @@ app.get('/', function (req, res) {
 });
 
 app.get('/connect/:id', function (req, res) {
-    let id = req.params.id;
-    doc.fetch(function (err) {
-        if (err) throw err;
-        // Create document if one does not exist
-        if (doc.type === null)
-            doc.create([], 'rich-text', null);
-    });
-
     res.writeHead(200, streamHeaders); // Setup stream
-    // First message
-    res.write(JSON.stringify({data: {content: []} }));
-    res.write('\n');
+    // Create document if one does not exist
+    if (doc.type === null) {
+        doc.create([], 'rich-text', null);
+    }
 
-    doc.on('op', function (ops, source) {
-        res.write(JSON.stringify({data: {content: [ops]} }));
-    });
-
-    res.end();
+    setInterval(function() {
+        if (ops.length > 0) {
+            res.write('data: ' + JSON.stringify(ops) + '\n\n');
+            ops.length = 0;
+        }
+    }, 1000);
 });
 
 app.post('/op/:id', function (req, res) {
-    console.log(req.body.content);
-    doc.subscribe(function (err) {
-        if (err) throw err;
-        for (let op of req.body.content)
-            doc.submitOp(op);
-    });
+    for (let op of req.body.content) {
+        doc.submitOp(op);
+    }
     
     res.json();
 })

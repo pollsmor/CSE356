@@ -11,7 +11,5 @@ $ npm install @teamwork/websocket-json-stream
 $ npm install rich-text
 
 Setup NGINX:
-$ cp server.conf /etc/nginx/sites-available/
-$ ln /etc/nginx/sites-available/server.conf /etc/nginx/sites-enabled
-$ rm /etc/nginx/sites-enabled/default
+$ cp server.conf /etc/nginx/nginx.conf
 $ systemctl restart nginx

@@ -1,4 +1,3 @@
-const randString = 'abcdefghijklmnopqrstuvwxyz';
 const ops = []; // Array of oplists
 let timer = 1;
 let isFirstMessage = true;
@@ -9,31 +8,25 @@ const quill = new Quill('#editor', {
   theme: 'snow'
 });
 
-function getRandomId() {
-  let randLetter = randString.charAt(Math.floor(Math.random() * 26));
-  let randLetter2 = randString.charAt(Math.floor(Math.random() * 26));
-  return randLetter + Date.now() + randLetter2;
-}
-
-// Open connection to server
-const id = getRandomId();
-axios.get(`/connect/${id}`)
-  .catch(function (err) {});
-
 // Queue up changes to ops array
-quill.on('text-change', function(delta, oldDelta, source) {
+quill.on('text-change', (delta, oldDelta, source) => {
   if (source === 'user') {
     ops.push(delta.ops);
   }
 });
 
+// Open connection to server
+const id = Date.now();
+axios.get(`/connect/${id}`)
+  .catch(function (err) {});
+
 // Only send ops every second
-setInterval(function() {
+setInterval(() => {
   if (timer <= 0 && ops.length > 0) {
     let opsCopy = Array.from(ops);
     ops.length = 0;
     axios.post(`/op/${id}`, opsCopy)
-      .then(function () {
+      .then(() => {
       timer = 1;
     });
   }

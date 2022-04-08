@@ -1,11 +1,15 @@
 Install Node.js: 
 - https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
 
+Install MongoDB:
+- https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
+
 $ apt install nginx
 
 $ npm install -g nodemon
 $ npm install express
 $ npm install sharedb
+$ npm install sharedb-mongo
 $ npm install ws
 $ npm install @teamwork/websocket-json-stream
 $ npm install rich-text

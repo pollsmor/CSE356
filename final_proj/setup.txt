@@ -13,7 +13,9 @@ $ npm install sharedb-mongo
 $ npm install ws
 $ npm install @teamwork/websocket-json-stream
 $ npm install rich-text
-$ npm install quill-delta-to-html
+$ npm install quill-delta-to-html <-- only milestone 1
+$ npm install ejs
+$ npm install mongoose
 
 Setup NGINX:
 $ cp server.conf /etc/nginx/nginx.conf

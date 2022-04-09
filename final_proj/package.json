@@ -1,8 +1,10 @@
 {
   "dependencies": {
     "@teamwork/websocket-json-stream": "^2.0.0",
+    "connect-mongodb-session": "^3.1.1",
     "ejs": "^3.1.6",
     "express": "^4.17.3",
+    "express-session": "^1.17.2",
     "mongoose": "^6.2.10",
     "quill-delta-to-html": "^0.12.1",
     "rich-text": "^4.1.0",

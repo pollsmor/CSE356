@@ -16,6 +16,8 @@ $ npm install rich-text
 $ npm install quill-delta-to-html <-- only milestone 1
 $ npm install ejs
 $ npm install mongoose
+$ npm install express-session
+$ npm install connect-mongodb-session
 
 Setup NGINX:
 $ cp server.conf /etc/nginx/nginx.conf

@@ -3,7 +3,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const WebSocketJSONStream = require('@teamwork/websocket-json-stream');
 const ShareDB = require('sharedb');
-const db = require('sharedb-mongo')('mongodb://localhost:27017/docs');
+const db = require('sharedb-mongo')('mongodb://localhost:27017/final');
 const QuillDeltaToHtmlConverter = require('quill-delta-to-html').QuillDeltaToHtmlConverter;
 
 const app = express();

@@ -1,8 +1,16 @@
 const http = require('http');
 const express = require('express');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const server = http.createServer(app);
+const transport = nodemailer.createTransport({
+  service: 'Outlook365',
+  auth: {
+    user: 'kevinli4321@outlook.com',
+    pass: '5bCuOVCh7IMqjPOM71dPahM3i6q7FO'
+  }
+});
 
 // =====================================================================
 // Session handling
@@ -59,69 +67,71 @@ server.listen(3000, () => {
 
 // Routes ====================================================================
 // Frontend
-app.get('/', function (req, res) {
-  if (req.session.username) {
+app.get('/home', function (req, res) {
+  if (req.session.name) {
     res.render('docs');
   } else {
     res.render('login');
   }
 });
 
-app.post('/addUser', async function (req, res) {
+app.post('/users/login', function (req, res) {
+  // Try to log in with provided credentials
+  let name = req.body.name;
+  User.findOne(
+    { name: name },
+    (err, user) => {
+      if (!user || !user.verified || req.body.password !== user.password)
+        res.json({ error: true, message: 'Incorrect credentials.' });
+      else { // Establish session
+        req.session.name = name;
+        res.json({ name: name });
+      }
+    }
+  );
+});
+
+app.post('/users/logout', function (req, res) {
+  if (req.session.name) {
+    req.session.destroy();
+    res.json({});
+  } else res.json({ error: true, message: 'You are already logged out.' }); 
+});
+
+app.post('/users/signup', async function (req, res) {
+  let nameExists = await User.exists({ name: req.body.name });
+  let emailExists = await User.exists({ email: req.body.email });
+  if (nameExists || emailExists)
+    return res.json({ error: true, message: 'Name or email already exists.' });
+
+  let key = Math.random().toString(36).slice(2) // Random string
   let user = new User({
-    username: req.body.username,
+    name: req.body.name,
+    email: req.body.email,
     password: req.body.password,
-    email: req.body.email
+    key: key
   });
 
-    const usernameExists = await User.exists({ username: user.username });
-    const emailExists = await User.exists({ email: user.email });
-    if (usernameExists || emailExists)
-      res.json({ status: 'ERROR' });
-    else {
-      user.save((err, user) => {
-        if (err) throw err;
-        res.json({ status: 'OK' });
-      });
-    }
+  user.save();
+  let serverIp = '209.94.56.234';
+  await transport.sendMail({
+      to: user.email,
+      subject: 'Verification key',
+      text: `http://${serverIp}/users/verify?email=${user.email}&key=${key}`
+  });
+
+  res.json({});
 });
 
-app.post('/verify', function (req, res) {
-  if (req.body.key === 'abracadabra') {
-    User.updateOne(
-      { email: req.body.email }, // Filter
-      { verified: true }, // Update
-      (err, user) => {
-        if (user.matchedCount === 0)
-          res.json({status: 'ERROR' });
-        else res.json({ status: 'OK' });
-      }
-    );
-  } else res.json({ status: 'ERROR' });
-});
-
-app.post('/login', function (req, res) {
-  // Session found
-  if (req.session.username) {
-    res.json({ status: 'OK' });
-  } else { // Try to log in with provided credentials
-    User.findOne(
-      { username: req.body.username },
-      (err, user) => {
-        if (!user || !user.verified || req.body.password !== user.password)
-          res.json({ status: 'ERROR' });
-        else { // Establish session
-          req.session.username = req.body.username;
-          res.json({ status: 'OK' });
-        }
-      }
-    );
+app.get('/users/verify', async function (req, res) {
+  let user = await User.findOne({ email: req.query.email });
+  if (user == null || user.key !== req.query.key) {
+    res.json({ error: true, message: 'Invalid email or key.'});
   }
-});
-
-app.post('/logout', function (req, res) {
-  if (req.session.username) {
-    req.session.destroy();
-    res.json({ status: 'OK' });
-  } else res.json({ status: 'ERROR' }); 
+  else {
+    user.verified = true;
+    user.save();
+    req.session.name = user.name; // Establish session
+    res.redirect('/home'); // Redirect to homepage
+  }
 });

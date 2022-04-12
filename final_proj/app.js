@@ -38,11 +38,12 @@ app.use(express.urlencoded({ extended: true })); // Parse HTML form JSON
 // Setup ShareDB and connect to it via WebSockets
 const { MongoClient } = require('mongodb');
 const client = new MongoClient(mongoUri);
-let docs;
+let docs, o_docs;
 client.connect((err) => {
   if (err) throw err;
   const db = client.db('final');
   docs = db.collection('docs');
+  o_docs = db.collection('o_docs');
 });
 
 const ShareDB = require('sharedb');
@@ -83,6 +84,7 @@ app.get('/home', function (req, res) {
     });
   } else {
     res.render('login');
+    //res.json({ error: true, message: 'Session not found.' });
   }
 });
 
@@ -150,29 +152,50 @@ app.get('/users/verify', async function (req, res) {
 
 // =====================================================================
 app.post('/collection/create', function (req, res) {
-  let doc = connection.get('docs', req.body.name); // ShareDB document
-  doc.fetch((err) => {
-    if (err) throw err;
-    // Check if document already exists
-    if (doc.type != null)
-      res.json({ error: true, message: 'Document already exists.' });
-    else {
-      doc.create([], 'rich-text', null);
-      res.json({ docid: doc.id });
-    }
-  });
+  if (req.session.name) {
+    let doc = connection.get('docs', req.body.name); // ShareDB document
+    doc.fetch((err) => {
+      if (err) throw err;
+      // Check if document already exists
+      if (doc.type != null)
+        res.json({ error: true, message: 'Document already exists.' });
+      else {
+        doc.create([], 'rich-text', null);
+        res.json({ docid: doc.id });
+      }
+    });
+  } else res.json({ error: true, message: 'No session found.' });
 });
 
 app.post('/collection/delete', function(req, res) {
-  
+  if (req.session.name) {
+    let doc = connection.get('docs', req.body.docid); // ShareDB document
+    doc.fetch(async (err) => {
+      if (err) throw err;
+
+      if (doc.type == null) { // Doc does not exist
+        res.json({ error: true, message: 'Document does not exist.' });
+      }
+      else {
+        // Doc is guaranteed to be in MongoDB database
+        await docs.deleteOne({ _id: req.body.docid });
+        await o_docs.deleteOne({ d: req.body.docid });
+        doc.destroy();
+
+        res.json({});
+      }
+    });
+  } else res.json({ error: true, message: 'No session found.' });
 });
 
 app.get('/collection/list', async function (req, res) {
-  let results = await docs
-    .find({})
-    .sort({'_m.mtime': -1})
-    .limit(10)
-    .toArray();
+  if (req.session.name) {
+    let results = await docs
+      .find({})
+      .sort({'_m.mtime': -1})
+      .limit(10)
+      .toArray();
 
-  res.json(results);
+    res.json(results);
+  } else res.json({ error: true, message: 'No session found.' });
 });

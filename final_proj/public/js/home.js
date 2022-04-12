@@ -1,5 +1,5 @@
-const uid = Math.random().toString(36).slice(2); // Not very useful?
 let docs = document.getElementById('docs');
+let uid = document.getElementById('email').innerText;
 
 axios.get('/collection/list')
   .then((res) => {

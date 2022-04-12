@@ -79,7 +79,8 @@ server.listen(3000, () => {
 app.get('/', function (req, res) {
   if (req.session.name) {
     res.render('home', {
-      name: req.session.name
+      name: req.session.name,
+      email: req.session.email
     });
   } else res.render('login');
 });
@@ -87,7 +88,8 @@ app.get('/', function (req, res) {
 app.get('/home', function (req, res) {
   if (req.session.name) {
     res.render('home', {
-      name: req.session.name
+      name: req.session.name,
+      email: req.session.email
     });
   } else res.json({ error: true, message: 'Session not found.' });
 });
@@ -95,15 +97,16 @@ app.get('/home', function (req, res) {
 // User routes
 app.post('/users/login', function (req, res) {
   // Try to log in with provided credentials
-  let name = req.body.name;
+  let email = req.body.email;
   User.findOne(
-    { name: name },
+    { email: email },
     (err, user) => {
       if (!user || !user.verified || req.body.password !== user.password)
         res.json({ error: true, message: 'Incorrect credentials.' });
       else { // Establish session
-        req.session.name = name;
-        res.json({ name: name });
+        req.session.name = user.name;
+        req.session.email = user.email;
+        res.json({ name: user.name });
       }
     }
   );
@@ -117,10 +120,9 @@ app.post('/users/logout', function (req, res) {
 });
 
 app.post('/users/signup', async function (req, res) {
-  let nameExists = await User.exists({ name: req.body.name });
   let emailExists = await User.exists({ email: req.body.email });
-  if (nameExists || emailExists)
-    return res.json({ error: true, message: 'Name or email already exists.' });
+  if (emailExists)
+    return res.json({ error: true, message: 'Email already exists.' });
 
   let key = Math.random().toString(36).slice(2) // Random string
   let user = new User({
@@ -143,18 +145,21 @@ app.post('/users/signup', async function (req, res) {
 
 app.get('/users/verify', async function (req, res) {
   let user = await User.findOne({ email: req.query.email });
-  if (user == null || user.key !== req.query.key) {
+  if (user == null || user.key !== req.query.key)
     res.json({ error: true, message: 'Invalid email or key.'});
-  }
   else {
     user.verified = true;
     user.save();
-    req.session.name = user.name; // Establish session
+
+    // Establish session
+    req.session.name = user.name; 
+    req.session.email = req.query.email;
     res.redirect('/home'); // Redirect to homepage
   }
 });
 
 // =====================================================================
+// Collection routes
 app.post('/collection/create', function (req, res) {
   if (req.session.name) {
     let docId = Math.random().toString(36).slice(2) // Random string
@@ -202,16 +207,24 @@ app.get('/collection/list', async function (req, res) {
   } else res.json({ error: true, message: 'No session found.' });
 });
 
+// =====================================================================
+// Doc routes
 app.get('/doc/edit/:docid', async function (req, res) {
   if (req.session.name) {
     let doc = await docs.findOne({ _id: req.params.docid });
     res.render('doc', {
       name: req.session.name,
-      docName: doc.name
+      email: req.session.email,
+      docName: doc.name,
+      docId: doc._id
     });
   } else {
     res.json({ error: true, message: 'Session not found.' });
   }
+});
+
+app.get('/doc/connect/:docid/:uid', function (req, res) {
+  
 });
 
 // Get HTML of current document

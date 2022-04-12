@@ -11,7 +11,7 @@ axios.get('/collection/list')
       let date = new Date(doc._m.mtime);
       docBox.innerHTML = `
         <a href="/doc/edit/${docId}">
-          <p>${docId}</p>
+          <p>${doc.name}</p>
         </a>
         <button type="button" onclick="deleteDoc('${docId}')">Delete</button>
         <p>Last modified ${date}</p>

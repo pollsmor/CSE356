@@ -153,16 +153,17 @@ app.get('/users/verify', async function (req, res) {
 // =====================================================================
 app.post('/collection/create', function (req, res) {
   if (req.session.name) {
-    let doc = connection.get('docs', req.body.name); // ShareDB document
+    let docId = Math.random().toString(36).slice(2) // Random string
+    let doc = connection.get('docs', docId); // ShareDB document
     doc.fetch((err) => {
       if (err) throw err;
-      // Check if document already exists
-      if (doc.type != null)
-        res.json({ error: true, message: 'Document already exists.' });
-      else {
-        doc.create([], 'rich-text', null);
-        res.json({ docid: doc.id });
-      }
+      doc.create([], 'rich-text', null, async () => {
+        // Add name fields to documents (not really needed?)
+        await docs.updateOne({ _id: docId }, { $set: { name: req.body.name }});
+        await o_docs.updateOne({ d: docId }, { $set: { name: req.body.name }});
+
+        res.json({ docid: docId });
+      });
     });
   } else res.json({ error: true, message: 'No session found.' });
 });
@@ -172,16 +173,11 @@ app.post('/collection/delete', function(req, res) {
     let doc = connection.get('docs', req.body.docid); // ShareDB document
     doc.fetch(async (err) => {
       if (err) throw err;
-
-      if (doc.type == null) { // Doc does not exist
+      if (doc.type == null) // Doc does not exist
         res.json({ error: true, message: 'Document does not exist.' });
-      }
       else {
-        // Doc is guaranteed to be in MongoDB database
-        await docs.deleteOne({ _id: req.body.docid });
-        await o_docs.deleteOne({ d: req.body.docid });
+        doc.del();
         doc.destroy();
-
         res.json({});
       }
     });
@@ -191,7 +187,7 @@ app.post('/collection/delete', function(req, res) {
 app.get('/collection/list', async function (req, res) {
   if (req.session.name) {
     let results = await docs
-      .find({})
+      .find({ _type: { $ne: null } })
       .sort({'_m.mtime': -1})
       .limit(10)
       .toArray();

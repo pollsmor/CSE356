@@ -19,6 +19,7 @@ $ npm install ejs
 $ npm install mongoose
 $ npm install express-session
 $ npm install connect-mongodb-session
+$ npm install quill-delta-to-html
 
 Setup NGINX:
 $ cp server.conf /etc/nginx/nginx.conf

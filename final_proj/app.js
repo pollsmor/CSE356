@@ -1,15 +1,14 @@
 const http = require('http');
 const express = require('express');
 const nodemailer = require('nodemailer');
+const QuillDeltaToHtmlConverter = require('quill-delta-to-html').QuillDeltaToHtmlConverter;
 
 const app = express();
 const server = http.createServer(app);
 const transport = nodemailer.createTransport({
-  service: 'Outlook365',
-  auth: {
-    user: 'kevinli4321@outlook.com',
-    pass: '5bCuOVCh7IMqjPOM71dPahM3i6q7FO'
-  }
+  host: 'localhost',
+  port: 25,
+  tls: { rejectUnauthorized: false }
 });
 
 // =====================================================================
@@ -192,6 +191,26 @@ app.get('/collection/list', async function (req, res) {
       .limit(10)
       .toArray();
 
+    // Since API wants this field
+    results.forEach((e) => { e.id = e._id; })
     res.json(results);
   } else res.json({ error: true, message: 'No session found.' });
+});
+
+// Get HTML of current document
+app.get('/doc/get/:docid/:uid', function (req, res) {
+  if (req.session.name) {
+    let doc = connection.get('docs', req.params.docid);
+    doc.fetch((err) => {
+      if (err) throw err;
+      if (doc.type == null) // Doc does not exist
+        return res.json({ error: true, message: 'Document does not exist!' });
+
+      res.set('Content-Type', 'text/html');
+      const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+      const html = converter.convert();
+
+      res.send(Buffer.from(html));
+    });
+  } else res.json({ error: true, message: 'Session not found.' });
 });

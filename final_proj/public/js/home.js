@@ -1,3 +1,4 @@
+const uid = Math.random().toString(36).slice(2); // Not very useful?
 let docs = document.getElementById('docs');
 
 axios.get('/collection/list')
@@ -12,6 +13,9 @@ axios.get('/collection/list')
       docBox.innerHTML = `
         <a href="/doc/edit/${docId}">
           <p>${doc.name}</p>
+        </a>
+        <a href="/doc/get/${docId}/${uid}">
+          <button type="button">View HTML</button>
         </a>
         <button type="button" onclick="deleteDoc('${docId}')">Delete</button>
         <p>Last modified ${date}</p>

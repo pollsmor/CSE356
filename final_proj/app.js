@@ -76,15 +76,20 @@ server.listen(3000, () => {
 
 // Routes ====================================================================
 // Frontend
+app.get('/', function (req, res) {
+  if (req.session.name) {
+    res.render('home', {
+      name: req.session.name
+    });
+  } else res.render('login');
+});
+
 app.get('/home', function (req, res) {
   if (req.session.name) {
     res.render('home', {
       name: req.session.name
     });
-  } else {
-    res.render('login');
-    //res.json({ error: true, message: 'Session not found.' });
-  }
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // User routes
@@ -195,6 +200,18 @@ app.get('/collection/list', async function (req, res) {
     results.forEach((e) => { e.id = e._id; })
     res.json(results);
   } else res.json({ error: true, message: 'No session found.' });
+});
+
+app.get('/doc/edit/:docid', async function (req, res) {
+  if (req.session.name) {
+    let doc = await docs.findOne({ _id: req.params.docid });
+    res.render('doc', {
+      name: req.session.name,
+      docName: doc.name
+    });
+  } else {
+    res.json({ error: true, message: 'Session not found.' });
+  }
 });
 
 // Get HTML of current document

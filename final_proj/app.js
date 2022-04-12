@@ -18,7 +18,7 @@ const mongoUri = 'mongodb://localhost:27017/final';
 const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const mongoose = require('mongoose');
-const User = require('./UserModel');
+const User = require('./models/UserModel');
 
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 store.on('error', (err) => { throw err; }); // Catch errors
@@ -36,6 +36,15 @@ app.use(express.urlencoded({ extended: true })); // Parse HTML form JSON
 
 // =====================================================================
 // Setup ShareDB and connect to it via WebSockets
+const { MongoClient } = require('mongodb');
+const client = new MongoClient(mongoUri);
+let docs;
+client.connect((err) => {
+  if (err) throw err;
+  const db = client.db('final');
+  docs = db.collection('docs');
+});
+
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const WebSocket = require('ws');
@@ -69,12 +78,15 @@ server.listen(3000, () => {
 // Frontend
 app.get('/home', function (req, res) {
   if (req.session.name) {
-    res.render('docs');
+    res.render('home', {
+      name: req.session.name
+    });
   } else {
     res.render('login');
   }
 });
 
+// User routes
 app.post('/users/login', function (req, res) {
   // Try to log in with provided credentials
   let name = req.body.name;
@@ -134,4 +146,33 @@ app.get('/users/verify', async function (req, res) {
     req.session.name = user.name; // Establish session
     res.redirect('/home'); // Redirect to homepage
   }
+});
+
+// =====================================================================
+app.post('/collection/create', function (req, res) {
+  let doc = connection.get('docs', req.body.name); // ShareDB document
+  doc.fetch((err) => {
+    if (err) throw err;
+    // Check if document already exists
+    if (doc.type != null)
+      res.json({ error: true, message: 'Document already exists.' });
+    else {
+      doc.create([], 'rich-text', null);
+      res.json({ docid: doc.id });
+    }
+  });
+});
+
+app.post('/collection/delete', function(req, res) {
+  
+});
+
+app.get('/collection/list', async function (req, res) {
+  let results = await docs
+    .find({})
+    .sort({'_m.mtime': -1})
+    .limit(10)
+    .toArray();
+
+  res.json(results);
 });

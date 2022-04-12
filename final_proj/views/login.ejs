@@ -4,18 +4,19 @@
       <meta charset="utf-8">
       <meta name="viewport", content="width=device-width, initial-scale=1">
       <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> <!-- Spoof -->
+      <link rel="stylesheet" type="text/css" href="/css/style.css">
       <title>Login/Register</title>
   </head>
   <body>
-    <h1>CSE 356 Final Project: Google Docs Clone</h1>
-    <h2>By TeamSoloKid</h2>
+    <h2>CSE 356 Final Project: Google Docs Clone</h2>
+    <h3>By TeamSoloKid</h3>
     <h3>Log in here:</h3>
     <form action="/users/login" method="post">
       <label for="username">Name</label><br>
       <input required type="text" name="name"></br>
 
       <label for="password">Password</label><br>
-      <input required type="password" name="password"><br><br>
+      <input required type="password" name="password"><br>
 
       <button type="submit">Login</button>
     </form><hr>
@@ -29,20 +30,9 @@
       <input required type="text" name="email"></br>
 
       <label for="password">Password</label><br>
-      <input required type="password" name="password"><br><br>
+      <input required type="password" name="password"><br>
 
       <button type="submit">Register</button>
-    </form><hr>
-
-    <h3>[DEV] Verify account</h3>
-    <form action="/users/verify" method="get">
-      <label for="email">Email</label><br>
-      <input required type="text" name="email"><br>
-
-      <label for="key">Key</label><br>
-      <input type="text" name="key" value="abracadabra"><br><br>
-
-      <button type="submit">Verify</button>
     </form>
   </body>
 </html>

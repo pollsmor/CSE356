@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport", content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> <!-- Spoof -->
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+    <title>Documents</title>
+  </head>
+  <body>
+    <form action="/users/logout" method="post">
+      <button type="submit">Logout</button>
+    </form>
+    <h3>Welcome, <%= name %>!</h3><hr>
+
+    <h3>Create new document here:</h3>
+    <form action="/collection/create" method="post">
+      <label for="name">Document name</label><br>
+      <input required type="text" name="name"></br>
+
+      <button type="submit">Create new document</button>
+    </form><hr>
+
+    <h3>Recently modified documents:</h3>
+    <div id="docs"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/js/home.js"></script>
+  </body>
+</html>

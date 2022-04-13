@@ -6,7 +6,7 @@ let retry = false;
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {
-  modules: { toolbar: '#toolbar' },
+  modules: { toolbar: [ ['bold', 'italic'], ['image'] ]},
   theme: 'snow'
 });
 

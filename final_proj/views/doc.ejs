@@ -6,17 +6,12 @@
     <link href="https://cdn.quilljs.com/1.0.0/quill.snow.css" rel="stylesheet">
     <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> <!-- Spoof -->
     <link rel="stylesheet" type="text/css" href="/css/style.css">
-    <title>Editing <%= docName %></title>
+    <title>Editing [<%= docName %>]</title>
   </head>
   <body>
     <h3> <%= name %> [<span id='email'><%= email %></span>], editing [<%= docName %>]</h3>
     <span>Document ID: </span><span id="docid"><%= docId %></span><br><br>
     <a href="/home"><button type="button">Home</button></a><hr>
-
-    <div id="toolbar"> <!-- Quill toolbar -->
-      <button class="ql-bold">Bold</button>
-      <button class="ql-italic">Italic</button>
-    </div>
     
     <div id="editor"></div>  <!-- Quill editor -->
 

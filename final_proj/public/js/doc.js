@@ -28,8 +28,8 @@ axios.get(`/doc/connect/${docId}/${uid}`)
     // Don't want to keep showing an error on refresh.
   });
 
-// POST changes to server
-quill.on('text-change', async (delta, oldDelta, source) => {
+// POST ops to server
+quill.on('text-change', (delta, oldDelta, source) => {
   if (source === 'user') {
     retry = true;
     while (retry) {
@@ -46,17 +46,35 @@ quill.on('text-change', async (delta, oldDelta, source) => {
   }
 });
 
+// POST presence to server
+quill.on('selection-change', (range, oldRange, source) => {
+  if (source === 'user') {
+    if (range != null) { // Cursor is in the editor
+      axios.post(`/doc/presence/${docId}/${uid}`, {
+        index: range.index,
+        length: range.length
+      });
+    }
+  }
+});
+
 const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
+  console.log(message);
   message = JSON.parse(message.data);
   if (isFirstMessage) {
     isFirstMessage = false;
     quill.setContents(message.content);
     docVersion = message.version;
   } else {
-    if (!message.ack) {
-      quill.updateContents(message);
-      docVersion++;
+    if (!message.ack) { // Ignore 'ack' messages
+      if ('cursor' in message) { // Receive presence data
+        let selection = message.cursor;
+        quill.setSelection(selection.index, selection.length);
+      } else { // Receive op
+        quill.updateContents(message);
+        docVersion++;
+      }
     }
   }
 })

@@ -300,6 +300,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     let doc = connection.get('docs', docId);
     doc.fetch((err) => {
       if (err) throw err;
+
       res.writeHead(200, streamHeaders); // Setup stream
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
     });
@@ -355,6 +356,28 @@ app.get('/doc/get/:docid/:uid', function (req, res) {
       res.send(Buffer.from(html));
     });
   } else res.json({ error: true, message: 'Session not found.' });
+});
+
+// Presence
+app.post('/doc/presence/:docid/:uid', function(req, res) {
+  let docId = req.params.docid;
+  let uid = req.params.uid;
+  let presenceData = { 
+    index: req.body.index, 
+    length: req.body.length,
+    name: uid
+  };
+
+  let presence = connection.getDocPresence('docs', docId);
+  let localPresence = presence.create();
+
+  let users_of_doc = users_of_docs.get(docId);
+  users_of_doc.forEach((otherRes, otherUid) => {
+    if (uid !== otherUid) // Other users
+    otherRes.write(`data: { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }\n\n`);
+  });
+
+  res.json({});
 });
 
 // =====================================================================

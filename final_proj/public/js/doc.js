@@ -6,8 +6,20 @@ let retry = false;
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {
-  modules: { toolbar: [ ['bold', 'italic'], ['image'] ]},
-  theme: 'snow'
+  modules: { 
+    toolbar: [ ['bold', 'italic'], ['image'] ],
+    imageUpload: {
+      url: '/media/upload',
+      // First callback obtains a media ID
+      callbackOK: (res, next) => {
+        axios.get(`/media/access/${res.mediaid}`)
+          .then((res2) => { // Second callback retrives image location
+            next(res2.data);
+          });
+      }
+    }
+  },
+  theme: 'snow',
 });
 
 // Connect to server

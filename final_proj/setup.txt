@@ -20,6 +20,9 @@ $ npm install mongoose
 $ npm install express-session
 $ npm install connect-mongodb-session
 $ npm install quill-delta-to-html
+$ npm install express-fileupload
+$ npm install path
+$ npm install fs
 
 Setup NGINX:
 $ cp server.conf /etc/nginx/nginx.conf

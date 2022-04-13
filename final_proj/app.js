@@ -11,6 +11,9 @@ const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const nodemailer = require('nodemailer');
 const QuillDeltaToHtmlConverter = require('quill-delta-to-html').QuillDeltaToHtmlConverter;
+const fileUpload = require('express-fileupload');
+const path = require('path');
+const fs = require('fs');
 
 // MongoDB/Mongoose models
 const User = require('./models/User');
@@ -50,22 +53,29 @@ app.use(session({
 // Native MongoDB driver (for querying ShareDB docs)
 const MongoClient = require('mongodb').MongoClient;
 const client = new MongoClient(mongoUri);
-let docs;
+let docs, images;
 client.connect((err) => {
   if (err) throw err;
-  docs = client.db('final').collection('docs');
+  let db = client.db('final');
+  docs = db.collection('docs');
 });
 
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Parse form data as JSON
+app.use(fileUpload({
+  createParentPath: true,
+  limits: { fileSize: 1024 * 1024 }, // 1 MB
+  abortOnLimit: true
+}));
 app.use(function(req, res, next) {
   // Set ID header for every route
   res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
   next();
 });
 
+let serverIp = '209.94.56.234'; // Easier to just hardcode this
 const users_of_docs = new Map(); // Keep track of users viewing each document
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
@@ -144,7 +154,6 @@ app.post('/users/signup', async function (req, res) {
   user.save();
 
   // Send verification email
-  let serverIp = '209.94.56.234'; // Easier to just hardcode this
   await transport.sendMail({
       to: email,
       subject: 'Verification key',
@@ -345,5 +354,42 @@ app.get('/doc/get/:docid/:uid', function (req, res) {
 
       res.send(Buffer.from(html));
     });
+  } else res.json({ error: true, message: 'Session not found.' });
+});
+
+// =====================================================================
+// Media routes
+app.post('/media/upload', function (req, res) {
+  if (req.session.name) {
+    if (!req.files)
+      return res.json({ error: true, message: 'No file uploaded.' });
+
+    let file = req.files.image;
+    let ext = path.extname(file.name);
+    let filePath = __dirname + '/public/img/' + file.md5 + ext;
+    file.mv(filePath, (err) => {
+      if (err) throw err;
+      res.json({ mediaid: file.md5 });
+    });
+  } else res.json({ error: true, message: 'Session not found.' });
+});
+
+app.get('/media/access/:mediaid', function (req, res) {
+  if (req.session.name) {
+    let md5 = req.params.mediaid;
+    // Check if it's a .png
+    if (fs.existsSync(__dirname + '/public/img/' + md5 + '.png')) {
+      res.set('Content-Type', 'image/png');
+      res.send(`http://${serverIp}/img/${md5}.png`);
+    } 
+
+    // Check if it's a .jpg
+    else if (fs.existsSync(__dirname + '/public/img/' + md5 + '.jpg')) {
+      res.set('Content-Type', 'image/jpg');
+      res.send(`http://${serverIp}/img/${md5}.jpg`);
+    }
+
+    // Neither of them
+    else res.send({ error: true, message: 'Not a .png or .jpg!' });
   } else res.json({ error: true, message: 'Session not found.' });
 });

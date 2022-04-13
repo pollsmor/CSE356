@@ -34,21 +34,22 @@ mongoose.connection.once('open', () => {});
 app.use(express.urlencoded({ extended: true })); // Parse HTML form JSON
 
 // =====================================================================
-// Setup ShareDB and connect to it via WebSockets
+// Native MongoDB driver
 const { MongoClient } = require('mongodb');
 const client = new MongoClient(mongoUri);
-let docs, o_docs;
+let docs;
 client.connect((err) => {
   if (err) throw err;
   const db = client.db('final');
   docs = db.collection('docs');
-  o_docs = db.collection('o_docs');
 });
 
+// Setup ShareDB and connect to it via WebSockets
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const WebSocket = require('ws');
 const WebSocketJSONStream = require('@teamwork/websocket-json-stream');
+const DocName = require('./models/DocNameModel');
 
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
@@ -58,6 +59,9 @@ const wss = new WebSocket.Server({ server: server });
 wss.on('connection', (ws) => {
   backend.listen(new WebSocketJSONStream(ws));
 });
+
+// Keep track of users for every document
+const users_of_docs = new Map();
 
 // =====================================================================
 // Middleware that sets required header for every route
@@ -166,11 +170,14 @@ app.post('/collection/create', function (req, res) {
     let doc = connection.get('docs', docId); // ShareDB document
     doc.fetch((err) => {
       if (err) throw err;
-      doc.create([], 'rich-text', null, async () => {
-        // Add name fields to documents (not really needed?)
-        await docs.updateOne({ _id: docId }, { $set: { name: req.body.name }});
-        await o_docs.updateOne({ d: docId }, { $set: { name: req.body.name }});
+      doc.create([], 'rich-text', () => {
+        // Separate collection to store document name
+        let docName = new DocName({ 
+          id: docId,
+          name: req.body.name 
+        });
 
+        docName.save();
         res.json({ docid: docId });
       });
     });
@@ -180,14 +187,17 @@ app.post('/collection/create', function (req, res) {
 app.post('/collection/delete', function(req, res) {
   if (req.session.name) {
     let doc = connection.get('docs', req.body.docid); // ShareDB document
-    doc.fetch(async (err) => {
+    doc.fetch((err) => {
       if (err) throw err;
       if (doc.type == null) // Doc does not exist
         res.json({ error: true, message: 'Document does not exist.' });
       else {
-        doc.del();
-        doc.destroy();
-        res.json({});
+        DocName.deleteOne({ id: req.body.docid }, (err) => {
+          if (err) throw err;
+          doc.del();
+          doc.destroy();
+          res.json({});
+        })
       }
     });
   } else res.json({ error: true, message: 'No session found.' });
@@ -201,8 +211,13 @@ app.get('/collection/list', async function (req, res) {
       .limit(10)
       .toArray();
 
-    // Since API wants this field
-    results.forEach((e) => { e.id = e._id; })
+    // Since API wants an id and name field
+    for (let result of results) {
+      result.id = result._id;
+      let docName = await DocName.findOne({ id: result.id });
+      result.name = docName.name;
+    }
+
     res.json(results);
   } else res.json({ error: true, message: 'No session found.' });
 });
@@ -211,25 +226,88 @@ app.get('/collection/list', async function (req, res) {
 // Doc routes
 app.get('/doc/edit/:docid', async function (req, res) {
   if (req.session.name) {
-    let doc = await docs.findOne({ _id: req.params.docid });
+    let docId = req.params.docid;
+    let doc = await docs.findOne({ _id: docId });
+    if (doc == null) // Document does not exist
+      return res.json({ error: true, message: 'Document does not exist.' });
+      
+    let docName = await DocName.findOne({ id: docId });
     res.render('doc', {
       name: req.session.name,
       email: req.session.email,
-      docName: doc.name,
+      docName: docName.name,
       docId: doc._id
     });
-  } else {
-    res.json({ error: true, message: 'Session not found.' });
-  }
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
+// Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', function (req, res) {
-  
+  if (req.session.email === req.params.uid) {
+    // Tie res object to doc
+    let docId = req.params.docid;
+    let uid = req.params.uid;
+    if (users_of_docs.has(docId)) {
+      users_of_docs.get(docId).set(uid, res); 
+    } else { // Doc not tracked in map yet
+      let docMap = new Map();
+      docMap.set(req.params.uid, res);
+      users_of_docs.set(docId, docMap);
+    }
+
+    // Untie res object from doc upon disconnect
+    req.on('close', () => {
+      users_of_docs.get(docId).delete(uid);
+    });
+
+    const streamHeaders = {
+      'Content-Type': 'text/event-stream',
+      'Connection': 'keep-alive',
+      'Cache-Control': 'no-cache'
+    };
+
+    // Get whole document on initial load
+    let doc = connection.get('docs', docId);
+    doc.fetch((err) => {
+      if (err) throw err;
+      res.writeHead(200, streamHeaders); // Setup stream
+      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+    });
+  } else res.json({ error: true, message: 'Session not found' });
+});
+
+// Submit Delta op and to other users
+app.post('/doc/op/:docid/:uid', function (req, res) {
+  if (req.session.email === req.params.uid) {
+    let docVersion = req.body.version;
+    let doc = connection.get('docs', req.params.docid);
+    doc.fetch((err) => {
+      if (err) throw err;
+      if (doc.type == null)
+        return res.json({ error: true, message: 'Document does not exist.' });
+
+      if (docVersion <= doc.version)
+        return res.json({ status: 'retry' });
+      else {
+        let op = req.body.op;
+        doc.submitOp(op);
+        let docUsers = users_of_docs.get(req.params.docid);
+        for (let [uid, otherRes] of docUsers) {
+          if (req.params.uid !== uid) // Other users
+            otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
+          else // Acknowledge operation suceeded for sender
+            otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+        }
+
+        res.json({ status: 'ok' });
+      }
+    });
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Get HTML of current document
 app.get('/doc/get/:docid/:uid', function (req, res) {
-  if (req.session.name) {
+  if (req.session.email === req.params.uid) {
     let doc = connection.get('docs', req.params.docid);
     doc.fetch((err) => {
       if (err) throw err;

@@ -368,9 +368,6 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
     name: uid
   };
 
-  let presence = connection.getDocPresence('docs', docId);
-  let localPresence = presence.create();
-
   let users_of_doc = users_of_docs.get(docId);
   users_of_doc.forEach((otherRes, otherUid) => {
     if (uid !== otherUid) // Other users

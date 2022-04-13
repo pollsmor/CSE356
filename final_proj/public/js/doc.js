@@ -60,7 +60,6 @@ quill.on('selection-change', (range, oldRange, source) => {
 
 const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
-  console.log(message);
   message = JSON.parse(message.data);
   if (isFirstMessage) {
     isFirstMessage = false;

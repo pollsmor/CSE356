@@ -2,6 +2,7 @@ let uid = document.getElementById('email').innerText;
 let docId = document.getElementById('docid').innerText;
 let isFirstMessage = true;
 let docVersion;
+let retry = false;
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {
@@ -12,22 +13,24 @@ const quill = new Quill('#editor', {
 // Connect to server
 axios.get(`/doc/connect/${docId}/${uid}`)
   .catch((err) => {
-    
+    // Don't want to keep showing an error on refresh.
   });
 
 // POST changes to server
-quill.on('text-change', (delta, oldDelta, source) => {
+quill.on('text-change', async (delta, oldDelta, source) => {
   if (source === 'user') {
-    let retry = true;
-    //while (retry) {
+    retry = true;
+    while (retry) {
+      retry = false;
       docVersion++;
       axios.post(`/doc/op/${docId}/${uid}`, {
         version: docVersion,
         op: delta.ops
       }).then((res) => {
-        if (res.status === 'ok') retry = false;
+        if (res.data.status === 'retry')
+          retry = true;
       });
-    //}
+    }
   }
 });
 
@@ -39,11 +42,14 @@ stream.addEventListener('message', message => {
     quill.setContents(message.content);
     docVersion = message.version;
   } else {
-    if (!message.ack)
+    if (!message.ack) {
       quill.updateContents(message);
+      docVersion++;
+    }
   }
 })
 
+// Don't want stream to persist after refreshing.
 addEventListener('beforeunload', () => {
   stream.close();
 });

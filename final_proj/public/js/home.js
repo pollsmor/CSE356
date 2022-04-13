@@ -9,7 +9,7 @@ axios.get('/collection/list')
       docBox.className = 'docBox';
       docBox.id = docId;
 
-      let date = new Date(doc._m.mtime);
+      let date = new Date(doc.mtime);
       docBox.innerHTML = `
         <a href="/doc/edit/${docId}">
           <p>${doc.name}</p>
@@ -25,6 +25,7 @@ axios.get('/collection/list')
     }
   });
 
+// Need JS to POST data without a form
 function deleteDoc(docId) {
   axios.post('/collection/delete', {
     docid: docId

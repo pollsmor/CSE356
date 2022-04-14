@@ -1,9 +1,8 @@
 const Delta = Quill.import('delta');
 
-const uid = document.getElementById('email').innerText;
+const uid = Math.random().toString(36).slice(2);
 const docId = document.getElementById('docid').innerText;
-const deltaQueue = [];
-let isFirstMessage = true;
+const queue = [];
 let docVersion;
 
 // Initialize Quill editor
@@ -31,8 +30,13 @@ axios.get(`/doc/connect/${docId}/${uid}`)
   });
 
 quill.on('text-change', (delta, oldDelta, source) => {
-  if (source === 'user')
-    deltaQueue.push(delta);
+  if (source === 'user') {
+    queue.push(delta);
+    axios.post(`/doc/op/${docId}/${uid}`, {
+      op: queue[0], 
+      version: docVersion
+    });
+  }
 });
 
 // POST presence to server
@@ -51,63 +55,51 @@ const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
   message = JSON.parse(message.data);
 
-  if (isFirstMessage) {
-    isFirstMessage = false;
+  if ('content' in message) { // Set initial editor contents
     quill.setContents(message.content);
     docVersion = message.version;
-  } else {
-    if (!message.ack) { // Ignore 'ack' messages
-      if ('cursor' in message) { // Receive presence data
-        let selection = message.cursor;
-        quill.setSelection(selection.index, selection.length);
-      } else { // Receive op
-        // Merge client delta with incoming delta
-        docVersion++;
-        if (deltaQueue.length == 0) { // Merely update client side
-          quill.updateContents(message); 
-        } else { // Merge pending client ops w/ incoming one
-          let finalDelta = new Delta();
-          while (deltaQueue.length > 0)
-            finalDelta.concat(deltaQueue.shift());
+  } 
+  
+  else if ('cursor' in message) { // Presence change
+    let selection = message.cursor;
+    quill.setSelection(selection.index, selection.length);
+  } 
+  
+  else if ('ack' in message) { // Acknowledge this client's change
+    docVersion++;
+    queue.shift(); // Pop client's acknowledged op
 
-          finalDelta.concat(new Delta(message)); // Append incoming delta
-          quill.updateContents(finalDelta.ops);
-
-          // POST final delta to server
-          let retry = true;
-          while (retry) {
-            retry = false;
-            axios.post(`/doc/op/${docId}/${uid}`, {
-              version: ++docVersion,
-              op: finalDelta.ops
-            }).then((res) => {
-              if (res.data.status === 'retry')
-                retry = true;
-            });
-          }
-        }
-      }
-    }
-  }
-})
-
-// Occasionally check delta queue for ops to push
-setInterval(function () {
-  if (deltaQueue.length > 0) {
-    // POST delta to server
-    let retry = true;
-    while (retry) {
-      retry = false;
+    // Work on the queue
+    if (queue.length > 0) {
       axios.post(`/doc/op/${docId}/${uid}`, {
-        version: ++docVersion,
-        op: deltaQueue.shift().ops
-      }).then((res) => {
-        if (res.data.status === 'retry')
-          retry = true;
+        op: queue[0], 
+        version: docVersion
+      });
+    }
+  } 
+  
+  else { // Received op from server
+    docVersion++;
+    let incomingDelta = new Delta(message);
+    if (queue.length === 0) {
+      quill.updateContents(incomingDelta);
+    } else {
+      // Merge incoming delta with each op in client queue
+      queue.map((delta) => {
+        let newDelta = incomingDelta.concat(delta);
+        console.log(newDelta);
+        quill.updateContents(newDelta);
+        return newDelta;
+      });
+
+      // Work on the queue
+      axios.post(`/doc/op/${docId}/${uid}`, {
+        op: queue[0], 
+        version: docVersion
       });
     }
   }
-}, 5);
+});
 
 // Don't want stream to persist after refreshing.
 addEventListener('beforeunload', () => {

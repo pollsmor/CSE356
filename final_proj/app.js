@@ -44,10 +44,13 @@ const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 store.on('error', (err) => { throw err; }); // Catch errors
 app.use(session({
   secret: 'secret',
-  cookie: { maxAge: 1000 * 60 * 60 * 24 }, // 1 day
+  cookie: { 
+    maxAge: 1000 * 60 * 60 * 24, // 1 day
+    sameSite: 'lax'
+  }, 
   store: store,
-  resave: true,
-  saveUninitialized: true
+  resave: false,
+  saveUninitialized: false
 }));
 
 // Native MongoDB driver (for querying ShareDB docs)
@@ -108,7 +111,7 @@ app.get('/home', function (req, res) {
       name: req.session.name,
       email: req.session.email
     });
-  } else res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: '[HOME] Session not found.' });
 });
 
 // User routes
@@ -120,7 +123,7 @@ app.post('/users/login', function (req, res) {
     (err, user) => {
       if (err) throw err;
       if (!user || !user.verified || req.body.password !== user.password)
-        res.json({ error: true, message: 'Incorrect credentials.' });
+        res.json({ error: true, message: 'Incorrect credentials or unverified.' });
       else { // Establish session
         req.session.name = user.name;
         req.session.email = user.email;
@@ -154,10 +157,11 @@ app.post('/users/signup', async function (req, res) {
   user.save();
 
   // Send verification email
+  let encodedEmail = encodeURIComponent(user.email);
   await transport.sendMail({
       to: email,
       subject: 'Verification key',
-      text: `http://${serverIp}/users/verify?email=${user.email}&key=${key}`
+      text: `http://${serverIp}/users/verify?email=${encodedEmail}&key=${key}`
   });
 
   res.json({});
@@ -200,7 +204,7 @@ app.post('/collection/create', function (req, res) {
         res.json({ docid: docId });
       });
     });
-  } else res.json({ error: true, message: 'No session found.' });
+  } else res.json({ error: true, message: '[CREATE DOC] No session found.' });
 });
 
 app.post('/collection/delete', function(req, res) {
@@ -211,7 +215,7 @@ app.post('/collection/delete', function(req, res) {
     doc.fetch((err) => {
       if (err) throw err;
       if (doc.type == null)
-        res.json({ error: true, message: 'Document does not exist.' });
+        res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
       else {
         DocMetadata.deleteOne(
           { id: docId }, (err) => {
@@ -224,7 +228,7 @@ app.post('/collection/delete', function(req, res) {
         );
       }
     });
-  } else res.json({ error: true, message: 'No session found.' });
+  } else res.json({ error: true, message: '[DELETE DOC] No session found.' });
 });
 
 app.get('/collection/list', async function (req, res) {
@@ -252,7 +256,7 @@ app.get('/collection/list', async function (req, res) {
     }
 
     res.json(results);
-  } else res.json({ error: true, message: 'No session found.' });
+  } else res.json({ error: true, message: '[DOC LIST] No session found.' });
 });
 
 // =====================================================================
@@ -264,7 +268,7 @@ app.get('/doc/edit/:docid', async function (req, res) {
     // I query the metadata DB first because doc.del() doesn't actually delete in ShareDB.
     let metadata = await DocMetadata.findOne({ id: docId });
     if (metadata == null) // Document does not exist
-      return res.json({ error: true, message: 'Document does not exist.' });
+      return res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
 
     let doc = await docs.findOne({ _id: docId });
     res.render('doc', {
@@ -273,12 +277,12 @@ app.get('/doc/edit/:docid', async function (req, res) {
       docName: metadata.name,
       docId: doc._id
     });
-  } else res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: '[EDIT DOC] Session not found.' });
 });
 
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', function (req, res) {
-  if (req.session.email === req.params.uid) {
+  if (req.session.name) {
     let docId = req.params.docid;
     let uid = req.params.uid;
 
@@ -287,64 +291,69 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
       users_of_docs.get(docId).set(uid, res); 
     else { // Doc not tracked in map yet
       let docMap = new Map();
-      docMap.set(req.params.uid, res);
+      docMap.set(uid, res);
       users_of_docs.set(docId, docMap);
     }
 
     // Remove connection
     req.on('close', () => {
       users_of_docs.get(docId).delete(uid);
-      doc.unsubscribe();
     });
 
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
-    doc.subscribe((err) => {
+    doc.fetch((err) => {
       if (err) throw err;
 
       res.writeHead(200, streamHeaders); // Setup stream
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
-      doc.on('op', (op, source) => {
-        if (source === uid) // Acknowledge operation
-          res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-        else 
-          res.write(`data: ${JSON.stringify(op)}\n\n`);
-      });
     });
-  } else res.json({ error: true, message: 'Session not found' });
+  } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
 
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', function (req, res) {
-  if (req.session.email === req.params.uid) {
+  if (req.session.name) {
     let docId = req.params.docid;
     let uid = req.params.uid;
     let version = req.body.version;
+    let op = req.body.op;
 
     let doc = connection.get('docs', docId);
     doc.fetch((err) => {
       if (err) throw err;
       if (doc.type == null)
-        return res.json({ error: true, message: 'Document does not exist.' });
+        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-      if (version < doc.version) // Note to self: could be < or <= don't know yet
+      if (version !== doc.version) { // Reject and tell client to retry
         return res.json({ status: 'retry' });
-      else {
-        doc.submitOp(req.body.op, { source: uid });
+      } else {
+        doc.submitOp(op);
+
+        // Broadcast change to everyone
+        let users_of_doc = users_of_docs.get(docId);
+        users_of_doc.forEach((otherRes, otherUid) => {
+          if (uid === otherUid) { // Acknowledge operation
+            otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+          } else {
+            otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
+          }
+        });
+
         res.json({ status: 'ok' });
       }
     });
-  } else res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
 });
 
 // Get HTML of current document
 app.get('/doc/get/:docid/:uid', function (req, res) {
-  if (req.session.email === req.params.uid) {
+  if (req.session.name) {
     let doc = connection.get('docs', req.params.docid);
     doc.fetch((err) => {
       if (err) throw err;
       if (doc.type == null)
-        return res.json({ error: true, message: 'Document does not exist!' });
+        return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
       res.set('Content-Type', 'text/html');
       const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
@@ -352,7 +361,7 @@ app.get('/doc/get/:docid/:uid', function (req, res) {
 
       res.send(Buffer.from(html));
     });
-  } else res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: '[GET HTML] Session not found.' });
 });
 
 // Presence
@@ -368,7 +377,7 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
   let users_of_doc = users_of_docs.get(docId);
   users_of_doc.forEach((otherRes, otherUid) => {
     if (uid !== otherUid) // Other users
-    otherRes.write(`data: { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }\n\n`);
+      otherRes.write(`data: { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }\n\n`);
   });
 
   res.json({});
@@ -379,16 +388,17 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
 app.post('/media/upload', function (req, res) {
   if (req.session.name) {
     if (!req.files)
-      return res.json({ error: true, message: 'No file uploaded.' });
+      return res.json({ error: true, message: '[UPLOAD] No file uploaded.' });
 
-    let file = req.files.image;
+    let file = req.files.image; // Testing uses .image
+    if (file == null) file = req.files.file;
     let ext = path.extname(file.name);
     let filePath = __dirname + '/public/img/' + file.md5 + ext;
     file.mv(filePath, (err) => {
       if (err) throw err;
       res.json({ mediaid: file.md5 });
     });
-  } else res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: '[UPLOAD] Session not found.' });
 });
 
 app.get('/media/access/:mediaid', function (req, res) {
@@ -407,6 +417,6 @@ app.get('/media/access/:mediaid', function (req, res) {
     }
 
     // Neither of them
-    else res.send({ error: true, message: 'Not a .png or .jpg!' });
-  } else res.json({ error: true, message: 'Session not found.' });
+    else res.send({ error: true, message: '[ACCESS MEDIA] Not a .png or .jpg!' });
+  } else res.json({ error: true, message: '[ACCESS MEDIA] Session not found.' });
 });

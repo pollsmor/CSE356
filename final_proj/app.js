@@ -291,18 +291,25 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
       users_of_docs.set(docId, docMap);
     }
 
-    // Untie res object from doc upon disconnect
+    // Remove connection
     req.on('close', () => {
       users_of_docs.get(docId).delete(uid);
+      doc.unsubscribe();
     });
 
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
-    doc.fetch((err) => {
+    doc.subscribe((err) => {
       if (err) throw err;
 
       res.writeHead(200, streamHeaders); // Setup stream
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+      doc.on('op', (op, source) => {
+        if (source === uid) // Acknowledge operation
+          res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+        else 
+          res.write(`data: ${JSON.stringify(op)}\n\n`);
+      });
     });
   } else res.json({ error: true, message: 'Session not found' });
 });
@@ -320,20 +327,10 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
       if (doc.type == null)
         return res.json({ error: true, message: 'Document does not exist.' });
 
-      if (version <= doc.version) // Note to self: could be < or <= don't know yet
+      if (version < doc.version) // Note to self: could be < or <= don't know yet
         return res.json({ status: 'retry' });
       else {
-        let op = req.body.op;
-        doc.submitOp(op);
-        let users_of_doc = users_of_docs.get(req.params.docid);
-
-        users_of_doc.forEach((otherRes, otherUid) => {
-          if (uid !== otherUid) // Other users
-            otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
-          else // Acknowledge operation suceeded for sender
-            otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-        });
-
+        doc.submitOp(req.body.op, { source: uid });
         res.json({ status: 'ok' });
       }
     });

@@ -1,8 +1,10 @@
-let uid = document.getElementById('email').innerText;
-let docId = document.getElementById('docid').innerText;
+const Delta = Quill.import('delta');
+
+const uid = document.getElementById('email').innerText;
+const docId = document.getElementById('docid').innerText;
+const deltaQueue = [];
 let isFirstMessage = true;
 let docVersion;
-let retry = false;
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {
@@ -28,22 +30,9 @@ axios.get(`/doc/connect/${docId}/${uid}`)
     // Don't want to keep showing an error on refresh.
   });
 
-// POST ops to server
 quill.on('text-change', (delta, oldDelta, source) => {
-  if (source === 'user') {
-    retry = true;
-    while (retry) {
-      retry = false;
-      docVersion++;
-      axios.post(`/doc/op/${docId}/${uid}`, {
-        version: docVersion,
-        op: delta.ops
-      }).then((res) => {
-        if (res.data.status === 'retry')
-          retry = true;
-      });
-    }
-  }
+  if (source === 'user')
+    deltaQueue.push(delta);
 });
 
 // POST presence to server
@@ -61,6 +50,7 @@ quill.on('selection-change', (range, oldRange, source) => {
 const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
   message = JSON.parse(message.data);
+
   if (isFirstMessage) {
     isFirstMessage = false;
     quill.setContents(message.content);
@@ -71,12 +61,53 @@ stream.addEventListener('message', message => {
         let selection = message.cursor;
         quill.setSelection(selection.index, selection.length);
       } else { // Receive op
-        quill.updateContents(message);
+        // Merge client delta with incoming delta
         docVersion++;
+        if (deltaQueue.length == 0) { // Merely update client side
+          quill.updateContents(message); 
+        } else { // Merge pending client ops w/ incoming one
+          let finalDelta = new Delta();
+          while (deltaQueue.length > 0)
+            finalDelta.concat(deltaQueue.shift());
+
+          finalDelta.concat(new Delta(message)); // Append incoming delta
+          quill.updateContents(finalDelta.ops);
+
+          // POST final delta to server
+          let retry = true;
+          while (retry) {
+            retry = false;
+            axios.post(`/doc/op/${docId}/${uid}`, {
+              version: ++docVersion,
+              op: finalDelta.ops
+            }).then((res) => {
+              if (res.data.status === 'retry')
+                retry = true;
+            });
+          }
+        }
       }
     }
   }
 })
+
+// Occasionally check delta queue for ops to push
+setInterval(function () {
+  if (deltaQueue.length > 0) {
+    // POST delta to server
+    let retry = true;
+    while (retry) {
+      retry = false;
+      axios.post(`/doc/op/${docId}/${uid}`, {
+        version: ++docVersion,
+        op: deltaQueue.shift().ops
+      }).then((res) => {
+        if (res.data.status === 'retry')
+          retry = true;
+      });
+    }
+  }
+}, 5);
 
 // Don't want stream to persist after refreshing.
 addEventListener('beforeunload', () => {

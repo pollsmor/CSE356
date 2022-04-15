@@ -23,11 +23,7 @@ const DocMetadata = require('./models/DocMetadata');
 const app = express();
 const server = http.createServer(app);
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
-const backend = new ShareDB({
-  db: db,
-  presence: true,
-  doNotForwardSendPresenceErrorsToClient: true
-});
+const backend = new ShareDB({db});
 const connection = backend.connect();
 const wss = new WebSocket.Server({ server: server });
 wss.on('connection', (ws) => {
@@ -83,6 +79,7 @@ app.use(function(req, res, next) {
 });
 
 let serverIp = '209.94.56.234'; // Easier to just hardcode this
+let docVersions = {}; // Since doc.version is too slow
 const users_of_docs = new Map(); // Keep track of users viewing each document
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
@@ -303,22 +300,31 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     let doc = connection.get('docs', docId);
     doc.subscribe((err) => {
       if (err) throw err;
+      if (doc.type == null)
+        return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
-      // Remove connection upon closing
-      req.on('close', () => {
-        users_of_docs.get(docId).delete(uid);
-        doc.unsubscribe();
-      });
+      if (!(docId in docVersions)) {
+        docVersions[docId] = doc.version;
+      }
 
       res.writeHead(200, streamHeaders); // Setup stream
-      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
 
-      doc.on('op', (op, source) => {
+      let receivedOpHandler = (op, source) => {
         if (source === uid) { // Send acknowledgement
           res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
         } else { // Send to everyone else
           res.write(`data: ${JSON.stringify(op)}\n\n`);
         }
+      };
+
+      doc.on('op', receivedOpHandler);
+      
+      // Remove connection upon closing
+      req.on('close', () => {
+        users_of_docs.get(docId).delete(uid);
+        doc.off('op', receivedOpHandler);
+        doc.unsubscribe();
       });
     });
 
@@ -340,17 +346,23 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     let op = req.body.op;
 
     let doc = connection.get('docs', docId);
-    if (version < doc.version) { // Reject and tell client to retry
-      return res.json({ status: 'retry' });
-    } else if (version > doc.version) {
-      return res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-    } else {
-      doc.submitOp(op, { source: uid }, (err) => {
-        if (err)
-          res.json({ error: true, message: 'ShareDB submit op failed.' });
-        else res.json({ status: 'ok' });
-      });
-    }
+    doc.fetch((err) => {
+      if (err) throw err;
+      else if (doc.type == null)
+        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
+
+      if (version < docVersions[docId]) { // Reject and tell client to retry
+        return res.json({ status: 'retry' });
+      } else if (version > docVersions[docId]) {
+        return res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+      } else {
+        docVersions[docId]++;
+        doc.submitOp(op, { source: uid }, (err) => {
+          if (err) throw err;       
+          res.json({ status: 'ok' });
+        });
+      }
+    });
   } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
 });
 

@@ -23,7 +23,11 @@ const DocMetadata = require('./models/DocMetadata');
 const app = express();
 const server = http.createServer(app);
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
-const backend = new ShareDB({db});
+const backend = new ShareDB({
+  db: db,
+  presence: true,
+  doNotForwardSendPresenceErrorsToClient: true
+});
 const connection = backend.connect();
 const wss = new WebSocket.Server({ server: server });
 wss.on('connection', (ws) => {
@@ -295,19 +299,35 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
       users_of_docs.set(docId, docMap);
     }
 
-    // Remove connection
-    req.on('close', () => {
-      users_of_docs.get(docId).delete(uid);
-    });
-
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
-    doc.fetch((err) => {
+    doc.subscribe((err) => {
       if (err) throw err;
+
+      // Remove connection upon closing
+      req.on('close', () => {
+        users_of_docs.get(docId).delete(uid);
+        doc.unsubscribe();
+      });
 
       res.writeHead(200, streamHeaders); // Setup stream
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+
+      doc.on('op', (op, source) => {
+        if (source === uid) { // Send acknowledgement
+          res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+        } else { // Send to everyone else
+          res.write(`data: ${JSON.stringify(op)}\n\n`);
+        }
+      });
     });
+
+    // Also setup presence
+    const presence = connection.getDocPresence('docs', docId);
+    presence.subscribe((err) => {
+      if (err) throw err;
+    });
+
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
 
@@ -320,29 +340,17 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     let op = req.body.op;
 
     let doc = connection.get('docs', docId);
-    doc.fetch((err) => {
-      if (err) throw err;
-      if (doc.type == null)
-        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
-
-      if (version !== doc.version) { // Reject and tell client to retry
-        return res.json({ status: 'retry' });
-      } else {
-        doc.submitOp(op);
-
-        // Broadcast change to everyone
-        let users_of_doc = users_of_docs.get(docId);
-        users_of_doc.forEach((otherRes, otherUid) => {
-          if (uid === otherUid) { // Acknowledge operation
-            otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-          } else {
-            otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
-          }
-        });
-
-        res.json({ status: 'ok' });
-      }
-    });
+    if (version < doc.version) { // Reject and tell client to retry
+      return res.json({ status: 'retry' });
+    } else if (version > doc.version) {
+      return res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+    } else {
+      doc.submitOp(op, { source: uid }, (err) => {
+        if (err)
+          res.json({ error: true, message: 'ShareDB submit op failed.' });
+        else res.json({ status: 'ok' });
+      });
+    }
   } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
 });
 
@@ -376,8 +384,9 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
 
   let users_of_doc = users_of_docs.get(docId);
   users_of_doc.forEach((otherRes, otherUid) => {
-    if (uid !== otherUid) // Other users
-      otherRes.write(`data: { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }\n\n`);
+    if (uid !== otherUid) {
+      otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }}\n\n`);
+    }
   });
 
   res.json({});
@@ -393,6 +402,9 @@ app.post('/media/upload', function (req, res) {
     let file = req.files.image; // Testing uses .image
     if (file == null) file = req.files.file;
     let ext = path.extname(file.name);
+    if (ext !== '.png' && ext !== '.jpg')
+      return res.json({error: true, message: '[UPLOAD] Only .png and .jpg files allowed.' });
+
     let filePath = __dirname + '/public/img/' + file.md5 + ext;
     file.mv(filePath, (err) => {
       if (err) throw err;
@@ -417,6 +429,6 @@ app.get('/media/access/:mediaid', function (req, res) {
     }
 
     // Neither of them
-    else res.send({ error: true, message: '[ACCESS MEDIA] Not a .png or .jpg!' });
+    else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist or not a .png or .jpg!' });
   } else res.json({ error: true, message: '[ACCESS MEDIA] Session not found.' });
 });

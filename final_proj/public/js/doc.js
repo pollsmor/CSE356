@@ -43,10 +43,7 @@ quill.on('text-change', (delta, oldDelta, source) => {
 quill.on('selection-change', (range, oldRange, source) => {
   if (source === 'user') {
     if (range != null) { // Cursor is in the editor
-      axios.post(`/doc/presence/${docId}/${uid}`, {
-        index: range.index,
-        length: range.length
-      });
+      axios.post(`/doc/presence/${docId}/${uid}`, range);
     }
   }
 });
@@ -60,8 +57,8 @@ stream.addEventListener('message', message => {
     docVersion = message.version;
   } 
   
-  else if ('cursor' in message) { // Presence change
-    let selection = message.cursor;
+  else if ('presence' in message) { // Presence change
+    let selection = message.presence.cursor;
     quill.setSelection(selection.index, selection.length);
   } 
   

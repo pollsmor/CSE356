@@ -311,14 +311,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
         docVersions[docId] = doc.version;
 
       res.writeHead(200, streamHeaders); // Setup stream
-      let opsArr = doc.data.ops;
-      let withoutDel = [];
-      for (let op of opsArr) {
-        if (!('delete' in op))
-          withoutDel.push(op);
-      }
-
-      res.write(`data: { "content": ${JSON.stringify(withoutDel)}, "version": ${docVersions[docId]} }\n\n`);
+      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
       
       let receiveOp = (op, source) => {
         if (source !== uid)
@@ -438,14 +431,15 @@ app.post('/media/upload', function (req, res) {
 app.get('/media/access/:mediaid', function (req, res) {
   if (req.session.name) {
     let mediaId = req.params.mediaid;
-    if (fs.existsSync(__dirname + '/public/img/' + mediaId)) {
+    let filePath = __dirname + '/public/img/' + mediaId;
+    if (fs.existsSync(filePath)) {
       File.findOne({ md5: mediaId }, (err, file) => {
         let mime = file.mime;
         if (mime !== 'image/png' && mime !== 'image/jpeg')
           res.json({ error: true, message: '[ACCESS MEDIA] Not a .png or .jpeg!' });
         else {
           res.set('Content-Type', mime);
-          res.send(`http://${serverIp}/img/${mediaId}`);
+          res.sendFile(filePath);
         }
       });
     } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });

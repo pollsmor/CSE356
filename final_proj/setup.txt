@@ -8,7 +8,6 @@ $ apt install nginx
 
 $ npm install -g nodemon
 $ npm install express
-$ npm install mongodb
 $ npm install sharedb
 $ npm install sharedb-mongo
 $ npm install ws

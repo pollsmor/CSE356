@@ -23,17 +23,11 @@ const quill = new Quill('#editor', {
   theme: 'snow',
 });
 
-// Connect to server
-axios.get(`/doc/connect/${docId}/${uid}`)
-  .catch((err) => {
-    // Don't want to keep showing an error on refresh.
-  });
-
 quill.on('text-change', (delta, oldDelta, source) => {
   if (source === 'user') {
     queue.push(delta);
     axios.post(`/doc/op/${docId}/${uid}`, {
-      op: queue[0], 
+      op: queue[0].ops, 
       version: docVersion
     });
   }
@@ -58,8 +52,10 @@ stream.addEventListener('message', message => {
   } 
   
   else if ('presence' in message) { // Presence change
-    let selection = message.presence.cursor;
-    quill.setSelection(selection.index, selection.length);
+    if (message.presence.cursor != null) {
+      let selection = message.presence.cursor;
+      quill.setSelection(selection.index, selection.length);
+    }
   } 
   
   else if ('ack' in message) { // Acknowledge this client's change
@@ -69,7 +65,7 @@ stream.addEventListener('message', message => {
     // Work on the queue
     if (queue.length > 0) {
       axios.post(`/doc/op/${docId}/${uid}`, {
-        op: queue[0], 
+        op: queue[0].ops, 
         version: docVersion
       });
     }
@@ -84,7 +80,6 @@ stream.addEventListener('message', message => {
       // Merge incoming delta with each op in client queue
       queue.map((delta) => {
         let newDelta = incomingDelta.concat(delta);
-        console.log(newDelta);
         quill.updateContents(newDelta);
         return newDelta;
       });

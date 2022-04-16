@@ -17,6 +17,7 @@ const fs = require('fs');
 
 // MongoDB/Mongoose models
 const User = require('./models/User');
+const File = require('./models/File');
 const DocMetadata = require('./models/DocMetadata');
 
 // Setup ShareDB and connect to it via WebSockets
@@ -53,16 +54,6 @@ app.use(session({
   saveUninitialized: false
 }));
 
-// Native MongoDB driver (for querying ShareDB docs)
-const MongoClient = require('mongodb').MongoClient;
-const client = new MongoClient(mongoUri);
-let docs, images;
-client.connect((err) => {
-  if (err) throw err;
-  let db = client.db('final');
-  docs = db.collection('docs');
-});
-
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json());
@@ -72,15 +63,15 @@ app.use(fileUpload({
   limits: { fileSize: 1024 * 1024 }, // 1 MB
   abortOnLimit: true
 }));
+// Set ID header for every route
 app.use(function(req, res, next) {
-  // Set ID header for every route
   res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
   next();
 });
 
 let serverIp = '209.94.56.234'; // Easier to just hardcode this
-let docVersions = {}; // Since doc.version is too slow
 const users_of_docs = new Map(); // Keep track of users viewing each document
+const docVersions = {};
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
@@ -197,7 +188,13 @@ app.post('/collection/create', function (req, res) {
     let doc = connection.get('docs', docId); // ShareDB document
     doc.fetch((err) => {
       if (err) throw err;
-      doc.create([], 'rich-text', () => {
+      if (doc.type != null)
+        return res.json({ error: true, message: 'Document already exists.' });
+
+      doc.create([], 'rich-text', (err2) => {
+        if (err2) throw err2;
+        console.log('Create document.');
+
         // Use another collection to store document metadata
         let metadata = new DocMetadata({ id: docId, name: req.body.name });
         metadata.save();
@@ -218,6 +215,7 @@ app.post('/collection/delete', function(req, res) {
       if (doc.type == null)
         res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
       else {
+        console.log('Delete document.');
         DocMetadata.deleteOne(
           { id: docId }, (err) => {
             if (err) throw err;
@@ -234,29 +232,32 @@ app.post('/collection/delete', function(req, res) {
 
 app.get('/collection/list', async function (req, res) {
   if (req.session.name) {
-    let results = await docs
-      .find({ _type: { $ne: null } })
-      .project({'_m.mtime': 1}) // Only include mtime and _id fields
-      .project({'mtime': '$_m.mtime'}) // Select field as
-      .sort({'_m.mtime': -1}) // Sort by descending order
-      .limit(10)
-      .toArray();
+    connection.createFetchQuery('docs', {
+      $sort: {'_m.mtime': -1 },
+      $limit: 10,
+    }, {}, async (err, results) => {
+      if (err) throw err;
 
-    // Since API wants an id and name field (need metadata)
-    let docIds = results.map(r => r._id);
-    // Maintain order of docIds passed in via aggregate()
-    let metadataArr = await DocMetadata.aggregate([
-      { $match: { id: { $in: docIds }}},
-      { $addFields: { '_order': {$indexOfArray: [docIds, '$id']}}},
-      { $sort: { '_order': 1 }}
-    ]);
+      // Since API wants an id and name field (need metadata)
+      let docIds = results.map(r => r.id);
+      // Maintain order of docIds passed in via aggregate()
+      let metadataArr = await DocMetadata.aggregate([
+        { $match: { id: { $in: docIds }}},
+        { $addFields: { '_order': {$indexOfArray: [docIds, '$id']}}},
+        { $sort: { '_order': 1 }}
+      ]);
 
-    for (let i = 0; i < results.length; i++) {
-      results[i].id = metadataArr[i].id;
-      results[i].name = metadataArr[i].name;
-    }
+      let output = [];
+      for (let i = 0; i < results.length; i++) {
+        let obj = {};
+        obj.id = metadataArr[i].id;
+        obj.name = metadataArr[i].name;
 
-    res.json(results);
+        output.push(obj);
+      }
+
+      res.json(output);
+    });
   } else res.json({ error: true, message: '[DOC LIST] No session found.' });
 });
 
@@ -271,12 +272,14 @@ app.get('/doc/edit/:docid', async function (req, res) {
     if (metadata == null) // Document does not exist
       return res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
 
-    let doc = await docs.findOne({ _id: docId });
-    res.render('doc', {
-      name: req.session.name,
-      email: req.session.email,
-      docName: metadata.name,
-      docId: doc._id
+    connection.createFetchQuery('docs', { _id: docId }, {}, (err, results) => {
+      let doc = results[0];
+      res.render('doc', {
+        name: req.session.name,
+        email: req.session.email,
+        docName: metadata.name,
+        docId: doc.id
+      });
     });
   } else res.json({ error: true, message: '[EDIT DOC] Session not found.' });
 });
@@ -303,37 +306,39 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
       if (doc.type == null)
         return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
-      if (!(docId in docVersions)) {
+      console.log(`User ${uid} has connected to document ${docId}.`);
+      if (!(docId in docVersions))
         docVersions[docId] = doc.version;
-      }
 
       res.writeHead(200, streamHeaders); // Setup stream
-      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
+      let opsArr = doc.data.ops;
+      let withoutDel = [];
+      for (let op of opsArr) {
+        if (!('delete' in op))
+          withoutDel.push(op);
+      }
 
-      let receivedOpHandler = (op, source) => {
-        if (source === uid) { // Send acknowledgement
-          res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-        } else { // Send to everyone else
-          res.write(`data: ${JSON.stringify(op)}\n\n`);
-        }
-      };
-
-      doc.on('op', receivedOpHandler);
+      res.write(`data: { "content": ${JSON.stringify(withoutDel)}, "version": ${docVersions[docId]} }\n\n`);
       
+      let receiveOp = (op, source) => {
+        if (source !== uid)
+          res.write(`data: ${JSON.stringify(op)}\n\n`);
+      };
+      
+      doc.on('op', receiveOp);
+
       // Remove connection upon closing
-      req.on('close', () => {
-        users_of_docs.get(docId).delete(uid);
-        doc.off('op', receivedOpHandler);
+      res.on('close', () => {
+        doc.off('op', receiveOp);
         doc.unsubscribe();
+        users_of_docs.get(docId).delete(uid);
+
+        // Broadcast presence disconnection
+        for (let [otherUid, otherRes] of users_of_docs.get(docId)) {
+          otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
+        }
       });
     });
-
-    // Also setup presence
-    const presence = connection.getDocPresence('docs', docId);
-    presence.subscribe((err) => {
-      if (err) throw err;
-    });
-
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
 
@@ -350,15 +355,17 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
       if (err) throw err;
       else if (doc.type == null)
         return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
-
       if (version < docVersions[docId]) { // Reject and tell client to retry
         return res.json({ status: 'retry' });
       } else if (version > docVersions[docId]) {
+        console.log('AHEAD');
         return res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
       } else {
         docVersions[docId]++;
         doc.submitOp(op, { source: uid }, (err) => {
-          if (err) throw err;       
+          if (err) throw err;   
+
+          users_of_docs.get(docId).get(uid).write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
           res.json({ status: 'ok' });
         });
       }
@@ -394,12 +401,11 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
     name: uid
   };
 
-  let users_of_doc = users_of_docs.get(docId);
-  users_of_doc.forEach((otherRes, otherUid) => {
+  for (let [otherUid, otherRes] of users_of_docs.get(docId)) {
     if (uid !== otherUid) {
       otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }}\n\n`);
     }
-  });
+  }
 
   res.json({});
 });
@@ -413,13 +419,17 @@ app.post('/media/upload', function (req, res) {
 
     let file = req.files.image; // Testing uses .image
     if (file == null) file = req.files.file;
-    let ext = path.extname(file.name);
-    if (ext !== '.png' && ext !== '.jpg')
-      return res.json({error: true, message: '[UPLOAD] Only .png and .jpg files allowed.' });
+    let mime = file.mimetype;
+    if (mime !== 'image/png' && mime !== 'image/jpeg')
+      return res.json({error: true, message: '[UPLOAD] Only .png and .jpeg files allowed.' });
 
-    let filePath = __dirname + '/public/img/' + file.md5 + ext;
+    let filePath = `${__dirname}/public/img/${file.md5}`;
     file.mv(filePath, (err) => {
       if (err) throw err;
+
+      // Store mime type into MongoDB
+      let fileData = new File({ md5: file.md5, mime: mime})
+      fileData.save();
       res.json({ mediaid: file.md5 });
     });
   } else res.json({ error: true, message: '[UPLOAD] Session not found.' });
@@ -427,20 +437,17 @@ app.post('/media/upload', function (req, res) {
 
 app.get('/media/access/:mediaid', function (req, res) {
   if (req.session.name) {
-    let md5 = req.params.mediaid;
-    // Check if it's a .png
-    if (fs.existsSync(__dirname + '/public/img/' + md5 + '.png')) {
-      res.set('Content-Type', 'image/png');
-      res.send(`http://${serverIp}/img/${md5}.png`);
-    } 
-
-    // Check if it's a .jpg
-    else if (fs.existsSync(__dirname + '/public/img/' + md5 + '.jpg')) {
-      res.set('Content-Type', 'image/jpg');
-      res.send(`http://${serverIp}/img/${md5}.jpg`);
-    }
-
-    // Neither of them
-    else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist or not a .png or .jpg!' });
-  } else res.json({ error: true, message: '[ACCESS MEDIA] Session not found.' });
+    let mediaId = req.params.mediaid;
+    if (fs.existsSync(__dirname + '/public/img/' + mediaId)) {
+      File.findOne({ md5: mediaId }, (err, file) => {
+        let mime = file.mime;
+        if (mime !== 'image/png' && mime !== 'image/jpeg')
+          res.json({ error: true, message: '[ACCESS MEDIA] Not a .png or .jpeg!' });
+        else {
+          res.set('Content-Type', mime);
+          res.send(`http://${serverIp}/img/${mediaId}`);
+        }
+      });
+    } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });
+  } else res.json({ error: true, message: 'Session not found.' });
 });

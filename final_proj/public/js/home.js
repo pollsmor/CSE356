@@ -4,12 +4,11 @@ let uid = document.getElementById('email').innerText;
 axios.get('/collection/list')
   .then((res) => {
     for (let doc of res.data) {
-      let docId = doc._id;
+      let docId = doc.id;
       let docBox = document.createElement('div');
       docBox.className = 'docBox';
       docBox.id = docId;
 
-      let date = new Date(doc.mtime);
       docBox.innerHTML = `
         <a href="/doc/edit/${docId}">
           <p>${doc.name}</p>
@@ -18,7 +17,7 @@ axios.get('/collection/list')
           <button type="button">View HTML</button>
         </a>
         <button type="button" onclick="deleteDoc('${docId}')">Delete</button>
-        <p>Last modified ${date}</p>
+        <br><br>
       `;
 
       docs.append(docBox);

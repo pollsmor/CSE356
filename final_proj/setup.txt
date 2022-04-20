@@ -4,25 +4,28 @@ Install Node.js:
 Install MongoDB:
 - https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
 
+Setup NGINX:
+$ cp server.conf /etc/nginx/nginx.conf
+$ systemctl restart nginx
 $ apt install nginx
+
+Setup Postfix:
+- https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-postfix-on-ubuntu-20-04
+$ apt install mailutils
 
 $ npm install -g nodemon
 $ npm install express
+$ npm install mongoose
+$ npm install express-session
+$ npm install connect-mongodb-session
+$ npm install ejs
 $ npm install sharedb
 $ npm install sharedb-mongo
 $ npm install ws
 $ npm install @teamwork/websocket-json-stream
 $ npm install rich-text
-$ npm install quill-delta-to-html <-- only milestone 1
-$ npm install ejs
-$ npm install mongoose
-$ npm install express-session
-$ npm install connect-mongodb-session
+$ npm install nodemailer
 $ npm install quill-delta-to-html
 $ npm install express-fileupload
 $ npm install path
 $ npm install fs
-
-Setup NGINX:
-$ cp server.conf /etc/nginx/nginx.conf
-$ systemctl restart nginx

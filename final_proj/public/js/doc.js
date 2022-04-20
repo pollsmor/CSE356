@@ -1,6 +1,6 @@
 const Delta = Quill.import('delta');
 
-const uid = Math.random().toString(36).slice(2);
+const uid = 's' + Math.random().toString(36).slice(2);
 const docId = document.getElementById('docid').innerText;
 const queue = [];
 let docVersion;

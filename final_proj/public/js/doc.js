@@ -44,6 +44,7 @@ quill.on('selection-change', (range, oldRange, source) => {
 
 const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
+  if (!message) stream.close();
   message = JSON.parse(message.data);
 
   if ('content' in message) { // Set initial editor contents

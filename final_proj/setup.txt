@@ -5,9 +5,9 @@ Install MongoDB:
 - https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
 
 Setup NGINX:
+$ apt install nginx
 $ cp server.conf /etc/nginx/nginx.conf
 $ systemctl restart nginx
-$ apt install nginx
 
 Setup Postfix:
 - https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-postfix-on-ubuntu-20-04

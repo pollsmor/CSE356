@@ -280,6 +280,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 
       // Setup stream and provide initial document contents
       res.writeHead(200, streamHeaders); 
+      req.setTimeout(600000); // Don't time out for 10 minutes
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
       
       let receiveOp = (op, source) => {
@@ -386,35 +387,35 @@ app.post('/media/upload', function (req, res) {
     if (mime !== 'image/png' && mime !== 'image/jpeg')
       return res.json({error: true, message: '[UPLOAD] Only .png and .jpeg files allowed.' });
 
-    let filePath = `${__dirname}/public/img/${file.md5}`;
+    let fileName = file.md5 + path.extname(file.name)
+    let filePath = `${__dirname}/public/img/${fileName}`;
     file.mv(filePath, async (err) => {
       if (err) throw err;
 
       // Store mime type into MongoDB (if it does not exist)
       await File.updateOne(
-        { md5: file.md5 },
+        { name: fileName },
         { $set: { mime: mime }},
         { upsert: true }
       );
-      res.json({ mediaid: file.md5 });
+      res.json({ mediaid: fileName });
     });
   } else res.json({ error: true, message: '[UPLOAD] Session not found.' });
 });
 
 app.get('/media/access/:mediaid', async function (req, res) {
   if (req.session.name) {
-    let mediaId = req.params.mediaid;
-    let filePath = __dirname + '/public/img/' + mediaId;
+    let fileName = req.params.mediaid;
+    let filePath = __dirname + '/public/img/' + fileName;
     if (fs.existsSync(filePath)) {
-      let file = await File.findOne({ md5: mediaId });
-      console.log(file);
+      let file = await File.findOne({ name: fileName });
       let mime = file.mime;
       if (mime !== 'image/png' && mime !== 'image/jpeg') {
         res.json({ error: true, message: '[ACCESS MEDIA] Not a .png or .jpeg!' });
       } else {
         res.set('Content-Type', mime);
         //res.sendFile(filePath); // Might need this for submission
-        res.send(`http://${serverIp}/img/${mediaId}`);
+        res.send(`http://${serverIp}/img/${fileName}`);
       }
     } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });
   } else res.json({ error: true, message: 'Session not found.' });

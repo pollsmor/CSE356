@@ -14,6 +14,7 @@ const QuillDeltaToHtmlConverter = require('quill-delta-to-html').QuillDeltaToHtm
 const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
+const elasticsearch = require('@elastic/elasticsearch');
 
 // MongoDB/Mongoose models
 const User = require('./models/user');
@@ -365,7 +366,9 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
   };
 
   // Broadcast presence to everyone else
-  for (let [otherUid, otherRes] of users_of_docs.get(docId)) {
+  let users = users_of_docs.get(docId);
+  if (users == null) return; // Avoid annoying error if I restart server
+  for (let [otherUid, otherRes] of users) {
     if (uid !== otherUid) {
       otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }}\n\n`);
     }
@@ -384,8 +387,8 @@ app.post('/media/upload', function (req, res) {
     let file = req.files.image; // Testing uses .image
     if (file == null) file = req.files.file;
     let mime = file.mimetype;
-    if (mime !== 'image/png' && mime !== 'image/jpeg')
-      return res.json({error: true, message: '[UPLOAD] Only .png and .jpeg files allowed.' });
+    if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/gif')
+      return res.json({error: true, message: '[UPLOAD] Only .png .jpeg and .gif files allowed.' });
 
     let fileName = file.md5 + path.extname(file.name)
     let filePath = `${__dirname}/public/img/${fileName}`;
@@ -410,13 +413,27 @@ app.get('/media/access/:mediaid', async function (req, res) {
     if (fs.existsSync(filePath)) {
       let file = await File.findOne({ name: fileName });
       let mime = file.mime;
-      if (mime !== 'image/png' && mime !== 'image/jpeg') {
-        res.json({ error: true, message: '[ACCESS MEDIA] Not a .png or .jpeg!' });
+      if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/gif') {
+        res.json({ error: true, message: '[ACCESS MEDIA] Not a .png .jpeg or .gif!' });
       } else {
         res.set('Content-Type', mime);
         //res.sendFile(filePath); // Might need this for submission
         res.send(`http://${serverIp}/img/${fileName}`);
       }
     } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });
-  } else res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: '[VIEW MEDIA] Session not found.' });
+});
+
+// =====================================================================
+// Milestone 3: Search/Suggest
+app.get('/index/search', function (req, res) {
+  if (req.session.name) {
+
+  } else res.json({ error: true, message: '[SEARCH] Session not found.' });
+});
+
+app.get('/index/suggest', function (req, res) {
+  if (req.session.name) {
+    
+  } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });

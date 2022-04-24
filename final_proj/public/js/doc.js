@@ -37,14 +37,14 @@ quill.on('text-change', (delta, oldDelta, source) => {
 quill.on('selection-change', (range, oldRange, source) => {
   if (source === 'user') {
     if (range != null) { // Cursor is in the editor
-      axios.post(`/doc/presence/${docId}/${uid}`, range);
+      axios.post(`/doc/presence/${docId}/${uid}`, range)
+        .catch(err => {});
     }
   }
 });
 
 const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
-  if (!message) stream.close();
   message = JSON.parse(message.data);
 
   if ('content' in message) { // Set initial editor contents

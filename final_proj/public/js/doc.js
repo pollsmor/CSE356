@@ -13,10 +13,7 @@ const quill = new Quill('#editor', {
       url: '/media/upload',
       // First callback obtains a media ID
       callbackOK: (res, next) => {
-        axios.get(`/media/access/${res.mediaid}`)
-          .then((res2) => { // Second callback retrives image location
-            next(res2.data);
-          });
+        next(`/media/access/${res.mediaid}`);
       }
     }
   },
@@ -37,8 +34,7 @@ quill.on('text-change', (delta, oldDelta, source) => {
 quill.on('selection-change', (range, oldRange, source) => {
   if (source === 'user') {
     if (range != null) { // Cursor is in the editor
-      axios.post(`/doc/presence/${docId}/${uid}`, range)
-        .catch(err => {});
+      axios.post(`/doc/presence/${docId}/${uid}`, range);
     }
   }
 });
@@ -94,7 +90,16 @@ stream.addEventListener('message', message => {
   }
 });
 
+stream.addEventListener('error', async () => {
+  await delay(1000);
+  window.location.reload();
+});
+
 // Don't want stream to persist after refreshing.
 addEventListener('beforeunload', () => {
   stream.close();
 });
+
+function delay(time) {
+  return new Promise(resolve => setTimeout(resolve, time));
+}

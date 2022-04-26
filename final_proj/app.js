@@ -14,11 +14,10 @@ const QuillDeltaToHtmlConverter = require('quill-delta-to-html').QuillDeltaToHtm
 const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
-const elasticsearch = require('@elastic/elasticsearch');
+const { Client } = require('@elastic/elasticsearch');
 
 // MongoDB/Mongoose models
 const User = require('./models/user');
-const File = require('./models/file'); // To store mediaid/md5 and MIME type of file
 const DocInfo = require('./models/docinfo'); // For now, only to store doc name
 
 // Session handling
@@ -30,6 +29,7 @@ store.on('error', (err) => { throw err; }); // Catch errors
 // Setup ShareDB and connect to it via WebSockets
 const app = express();
 const server = http.createServer(app);
+server.keepAliveTimeout = 60 * 1000;
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
@@ -45,10 +45,12 @@ const transport = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 });
 
+const esClient = new Client({ node: 'http://localhost:9200' });
+
 // Middleware
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
 app.use(session({
   secret: 'secret',
@@ -276,12 +278,31 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
         return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
       // doc.version is too slow, store doc version on initial load
-      if (!(docId in docVersions)) 
+      if (!(docId in docVersions)) {
         docVersions[docId] = doc.version;
+        // // Create Elasticsearch index if not exists
+        // esClient.indices.create({
+        //   index: 'documents',
+        //   body: { 
+        //     settings: {
+        //       analysis: {
+        //         analyzer: {
+        //           default: {
+        //             tokenizer: 'standard',
+        //             char_filter: ['html_strip'],
+        //             filter: ['lowercase', 'porter_stem', 'stop']
+        //           }
+        //         }
+        //       },
+        //     },
+        //   }
+        // }).catch(err => {
+        //   // Index already exists
+        // });
+      }
 
       // Setup stream and provide initial document contents
       res.writeHead(200, streamHeaders); 
-      req.setTimeout(600000); // Don't time out for 10 minutes
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
       
       let receiveOp = (op, source) => {
@@ -326,10 +347,27 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
         return res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
       } else {
         docVersions[docId]++; // Increment version, thereby locking document
-        doc.submitOp(op, { source: uid }, (err) => {
-          if (err) throw err;   
-
+        doc.submitOp(op, { source: uid }, async (err2) => {
+          if (err2) throw err2;   
           users_of_docs.get(docId).get(uid).write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+
+          // // Index into Elasticsearch from time to time
+          // if (docVersions[docId] % 20 === 0) {
+          //   let docinfo = await DocInfo.findOne({ docId: docId });
+          //   let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+          //   let html = converter.convert().toString();
+          //   await esClient.index({
+          //     index: 'documents',
+          //     id: docId,
+          //     body: {
+          //       docName: docinfo.name,
+          //       contents: html,
+          //     }
+          //   });
+
+          //   await esClient.indices.refresh({ index: 'documents' });
+          // }
+
           res.json({ status: 'ok' });
         });
       }
@@ -384,23 +422,16 @@ app.post('/media/upload', function (req, res) {
     if (!req.files)
       return res.json({ error: true, message: '[UPLOAD] No file uploaded.' });
 
-    let file = req.files.image; // Testing uses .image
+    let file = req.files.image; // doc.js's image uploading for client uses .image
     if (file == null) file = req.files.file;
     let mime = file.mimetype;
     if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/gif')
-      return res.json({error: true, message: '[UPLOAD] Only .png .jpeg and .gif files allowed.' });
+      return res.json({error: true, message: '[UPLOAD] Only .png .jpg and .gif files allowed.' });
 
     let fileName = file.md5 + path.extname(file.name)
     let filePath = `${__dirname}/public/img/${fileName}`;
-    file.mv(filePath, async (err) => {
+    file.mv(filePath, (err) => {
       if (err) throw err;
-
-      // Store mime type into MongoDB (if it does not exist)
-      await File.updateOne(
-        { name: fileName },
-        { $set: { mime: mime }},
-        { upsert: true }
-      );
       res.json({ mediaid: fileName });
     });
   } else res.json({ error: true, message: '[UPLOAD] Session not found.' });
@@ -411,24 +442,36 @@ app.get('/media/access/:mediaid', async function (req, res) {
     let fileName = req.params.mediaid;
     let filePath = __dirname + '/public/img/' + fileName;
     if (fs.existsSync(filePath)) {
-      let file = await File.findOne({ name: fileName });
-      let mime = file.mime;
-      if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/gif') {
-        res.json({ error: true, message: '[ACCESS MEDIA] Not a .png .jpeg or .gif!' });
-      } else {
-        res.set('Content-Type', mime);
-        //res.sendFile(filePath); // Might need this for submission
-        res.send(`http://${serverIp}/img/${fileName}`);
-      }
+      res.sendFile(filePath);
     } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });
   } else res.json({ error: true, message: '[VIEW MEDIA] Session not found.' });
 });
 
 // =====================================================================
 // Milestone 3: Search/Suggest
-app.get('/index/search', function (req, res) {
+app.get('/index/search', async function (req, res) {
   if (req.session.name) {
+    let word = req.query.q;
+    if (word == null) 
+      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
+    let results = await esClient.search({
+      index: 'documents',
+      query: {
+        bool: {
+          should: [
+            { prefix: { docName: word }},
+            { prefix: { contents: word }}
+          ]
+        }
+      },
+      highlight: {
+        fields: { contents: {}}
+      },
+      size: 10
+    });
+
+    res.json(results);
   } else res.json({ error: true, message: '[SEARCH] Session not found.' });
 });
 

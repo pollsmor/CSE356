@@ -95,8 +95,8 @@ app.use(function(req, res, next) {
 });
 
 // Constants
-let serverIp = '209.94.59.175'; // Easier to just hardcode this
-const users_of_docs = new Map(); // Keep track of users viewing each document
+const users_of_docs = new Map();
+const serverIp = '209.94.59.175'; // Easier to just hardcode this
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
@@ -195,44 +195,38 @@ app.get('/users/verify', async function (req, res) {
 
 // =====================================================================
 // Collection routes
-app.post('/collection/create', function (req, res) {
+app.post('/collection/create', async function (req, res) {
   if (req.session.name) {
     let docId = randomStr(); // Since documents can share names
     let doc = connection.get('docs', docId); // ShareDB document
+    await doc.fetch();
+    if (doc.type != null) { // Just in case randomStr() generates the same docId somehow
+      res.json({ error: true, message: '[CREATE DOC] Please try again.' });
+    } else {
+      await doc.create([], 'rich-text');
 
-    doc.fetch((err) => {
-      if (err) throw err;
-      if (doc.type != null) // Just in case randomStr() generates the same docId somehow
-        return res.json({ error: true, message: '[CREATE DOC] Please try again.' });
-
-      doc.create([], 'rich-text', (err2) => {
-        if (err2) throw err2;
-
-        // Use another collection to store document info (for now, name)
-        let docinfo = new DocInfo({ docId: docId, name: req.body.name });
-        docinfo.save();
-        res.json({ docid: docId });
-      });
-    });
+      // Use another collection to store document info (for now, name)
+      let docinfo = new DocInfo({ docId: docId, name: req.body.name });
+      docinfo.save();
+      res.json({ docid: docId });
+    }
   } else res.json({ error: true, message: '[CREATE DOC] No session found.' });
 });
 
-app.post('/collection/delete', function(req, res) {
+app.post('/collection/delete', async function(req, res) {
   if (req.session.name) {
     let docId = req.body.docid;
     let doc = connection.get('docs', docId); // ShareDB document
 
-    doc.fetch((err) => {
-      if (err) throw err;
-      if (doc.type == null) {
-        res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
-      } else {
-        DocInfo.deleteOne({ id: docId });
-        doc.del(); // Sets doc.type to null
-        doc.destroy(); // Removes doc object from memory
-        res.json({});
-      }
-    });
+    await doc.fetch();
+    if (doc.type == null) {
+      res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
+    } else {
+      DocInfo.deleteOne({ id: docId });
+      doc.del(); // Sets doc.type to null
+      doc.destroy(); // Removes doc object from memory
+      res.json({});
+    }
   } else res.json({ error: true, message: '[DELETE DOC] No session found.' });
 });
 
@@ -280,57 +274,57 @@ app.get('/doc/edit/:docid', async function (req, res) {
 });
 
 // Setup Delta event stream
-app.get('/doc/connect/:docid/:uid', function (req, res) {
+app.get('/doc/connect/:docid/:uid', async function (req, res) {
   if (req.session.name) {
     let docId = req.params.docid;
     let uid = req.params.uid;
 
+    // Get whole document on initial load
+    let doc = connection.get('docs', docId);
+    await doc.subscribe();
+    if (doc.type == null)
+      return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
+
     // Tie res object to doc
-    if (users_of_docs.has(docId))
-      users_of_docs.get(docId).set(uid, res); 
-    else { // Doc not tracked in map yet
+    if (users_of_docs.has(docId)) {
+      users_of_docs.get(docId).set(uid, res);
+    } else { // Doc not tracked yet
       let users_of_doc = new Map();
       users_of_doc.set(uid, res);
       users_of_docs.set(docId, users_of_doc);
     }
 
-    // Get whole document on initial load
-    let doc = connection.get('docs', docId);
-    doc.subscribe(async (err) => {
-      if (err) throw err;
-      if (doc.type == null)
-        return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
+    // doc.version is too slow, store doc version on initial load of doc
+    await redisClient.set(docId, doc.version);
 
-      // doc.version is too slow, store doc version on initial load of doc
-      await redisClient.set(docId, doc.version);
-      // Setup stream and provide initial document contents
-      res.writeHead(200, streamHeaders); 
-      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
-      
-      let receiveOp = (op, source) => {
-        if (source !== uid) {
-          res.write(`data: ${JSON.stringify(op)}\n\n`);
-        }
-      };
-      
-      doc.on('op', receiveOp);
-      res.on('close', () => { // End connection
-        doc.off('op', receiveOp);
-        doc.unsubscribe();
-        users_of_docs.get(docId).delete(uid);
+    // Setup stream and provide initial document contents
+    res.writeHead(200, streamHeaders); 
+    res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+    
+    let receiveOp = (op, source) => {
+      if (source !== uid)
+        res.write(`data: ${JSON.stringify(op)}\n\n`);
+      else 
+        res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+    };
+    doc.on('op', receiveOp);
 
-        // Broadcast presence disconnection
-        let users_of_doc = users_of_docs.get(docId);
-        users_of_doc.forEach((otherRes, otherUid) => {
-          otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
-        });
+    res.on('close', () => { // End connection
+      // Broadcast presence disconnection
+      let users_of_doc = users_of_docs.get(docId);
+      user_of_doc.delete(uid);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
       });
+
+      doc.unsubscribe();
+      doc.off('op', receiveOp);
     });
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
 
 // Submit Delta op to ShareDB and to other users
-app.post('/doc/op/:docid/:uid', function (req, res) {
+app.post('/doc/op/:docid/:uid', async function (req, res) {
   if (req.session.name) {
     let docId = req.params.docid;
     let uid = req.params.uid;
@@ -338,70 +332,62 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     let op = req.body.op;
 
     let doc = connection.get('docs', docId);
-    doc.fetch(async (err) => {
-      if (err) throw err;
-      else if (doc.type == null)
-        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
+    await doc.fetch();
+    if (doc.type == null)
+      return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-      let docVersion = await redisClient.get(docId);
-      if (version == docVersion) {
-        await redisClient.incr(docId);
-        doc.submitOp(op, { source: uid }, async (err2) => {
-          if (err2) throw err2;   
-          let userThatSubmitted = users_of_docs.get(docId).get(uid);
-          if (userThatSubmitted != null) // In case user disconnected right when submitOp happened
-            userThatSubmitted.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+    let docVersion = await redisClient.get(docId);
+    if (version == docVersion) {
+      await redisClient.incr(docId);
+      doc.submitOp(op, { source: uid }, async (err2) => {
+        if (err2) throw err2;   
+        // Index into Elasticsearch from time to time
+        // if (docVersions[docId] % 20 === 0) {
+        //   let docinfo = await DocInfo.findOne({ docId: docId });
+        //   let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+        //   let html = converter.convert().toString();
+        //   esClient.index({
+        //     index: 'docs',
+        //     id: docId,
+        //     body: {
+        //       docName: docinfo.name,
+        //       contents: html,
+        //     }
+        //   });
+        // }
 
-          // Index into Elasticsearch from time to time
-          // if (docVersions[docId] % 20 === 0) {
-          //   let docinfo = await DocInfo.findOne({ docId: docId });
-          //   let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-          //   let html = converter.convert().toString();
-          //   esClient.index({
-          //     index: 'docs',
-          //     id: docId,
-          //     body: {
-          //       docName: docinfo.name,
-          //       contents: html,
-          //     }
-          //   });
-          // }
-
-          res.json({ status: 'ok' });
-        });
-      } else if (version < docVersion) {
-        res.json({ status: 'retry' });
-      } else { // Shouldn't get to this point
-        res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-      }
-    });
+        res.json({ status: 'ok' });
+      });
+    } else if (version < docVersion) {
+      res.json({ status: 'retry' });
+    } else { // Shouldn't get to this point
+      res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+    }
   } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
 });
 
 // Get HTML of current document
-app.get('/doc/get/:docid/:uid', function (req, res) {
+app.get('/doc/get/:docid/:uid', async function (req, res) {
   if (req.session.name) {
     let doc = connection.get('docs', req.params.docid);
-    doc.fetch((err) => {
-      if (err) throw err;
-      if (doc.type == null)
-        return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
+    await doc.fetch();
+    if (doc.type == null)
+      return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
-      const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-      const html = converter.convert();
+    const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+    const html = converter.convert();
 
-      res.set('Content-Type', 'text/html');
-      res.send(Buffer.from(html));
-    });
+    res.set('Content-Type', 'text/html');
+    res.send(Buffer.from(html));
   } else res.json({ error: true, message: '[GET HTML] Session not found.' });
 });
 
 // Presence
-app.post('/doc/presence/:docid/:uid', function(req, res) {
+app.post('/doc/presence/:docid/:uid', async function(req, res) {
   let docId = req.params.docid;
   let uid = req.params.uid;
-  let presenceData = { 
-    index: req.body.index, 
+  let presenceData = {
+    index: req.body.index,
     length: req.body.length,
     name: uid
   };

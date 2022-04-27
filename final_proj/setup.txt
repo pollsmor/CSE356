@@ -6,7 +6,7 @@ Install MongoDB:
 
 Setup NGINX:
 $ apt install nginx
-$ cp server.conf /etc/nginx/nginx.conf
+$ cp nginx.conf /etc/nginx/nginx.conf
 $ systemctl restart nginx
 
 Setup Postfix:
@@ -22,6 +22,9 @@ $ cd /etc/elasticsearch/jvm.options.d/config.options
   -Xmx256m
 - Edit file /etc/elasticsearch/elasticsearch.yml to disable xpack.security.enrollemnt
 $ systemctl restart elasticsearch
+
+Install Redis:
+- https://www.digitalocean.com/community/tutorials/how-to-install-and-secure-redis-on-ubuntu-20-04
 
 Add Swapfile:
 - https://linuxize.com/post/how-to-add-swap-space-on-ubuntu-20-04/
@@ -43,3 +46,4 @@ $ npm install express-fileupload
 $ npm install path
 $ npm install fs
 $ npm install @elastic/elasticsearch
+$ npm install async-redis

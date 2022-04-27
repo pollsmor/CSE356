@@ -10,26 +10,24 @@ const db = require('sharedb-mongo')(mongoUri);
 const WebSocket = require('ws');
 const WebSocketJSONStream = require('@teamwork/websocket-json-stream');
 const nodemailer = require('nodemailer');
-const QuillDeltaToHtmlConverter = require('quill-delta-to-html').QuillDeltaToHtmlConverter;
+const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html')
 const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
 const { Client } = require('@elastic/elasticsearch');
+const redis = require('async-redis');
 
-// MongoDB/Mongoose models
+// Mongoose models
 const User = require('./models/user');
 const DocInfo = require('./models/docinfo'); // For now, only to store doc name
 
 // Session handling
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
-mongoose.connection.once('open', () => {});
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
-store.on('error', (err) => { throw err; }); // Catch errors
 
 // Setup ShareDB and connect to it via WebSockets
 const app = express();
 const server = http.createServer(app);
-server.keepAliveTimeout = 60 * 1000;
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
@@ -45,39 +43,65 @@ const transport = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 });
 
+// Create Elasticsearch index if not exists
 const esClient = new Client({ node: 'http://localhost:9200' });
+esClient.indices.create({
+  index: 'docs',
+  body: { 
+    settings: {
+      analysis: {
+        analyzer: {
+          my_analyzer: {
+            tokenizer: 'standard',
+            char_filter: ['html_strip'],
+            filter: ['lowercase', 'porter_stem', 'stop']
+          }
+        }
+      },
+    },
+    mappings: {
+      properties: {
+        contents: {
+          type: 'text',
+          analyzer: 'my_analyzer'
+        }
+      }
+    }
+  }
+}).catch(err => {
+  console.log('Index already exists.');
+});
+
+const redisClient = redis.createClient();
+redisClient.on('error', (err) => {
+  throw err;
+});
 
 // Middleware
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
+app.use(fileUpload({ createParentPath: true, abortOnLimit: true }));
 app.use(session({
   secret: 'secret',
   store: store,
   resave: false,
   saveUninitialized: false
 }));
-
-app.use(fileUpload({
-  createParentPath: true,
-  abortOnLimit: true
-}));
-
-// Set ID header for every route
 app.use(function(req, res, next) {
   res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
-  next();
+  next(); // Set ID header for every route
 });
 
 // Constants
 let serverIp = '209.94.59.175'; // Easier to just hardcode this
 const users_of_docs = new Map(); // Keep track of users viewing each document
-const docVersions = {};
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache'
+  'Cache-Control': 'no-cache',
+  'X-Accel-Buffering': 'no'
 };
 
 server.listen(3000, () => {
@@ -146,7 +170,7 @@ app.post('/users/signup', async function (req, res) {
 
   // Send verification email
   let encodedEmail = encodeURIComponent(email);
-  await transport.sendMail({
+  transport.sendMail({
       to: email,
       subject: 'Verification key',
       text: `http://${serverIp}/users/verify?email=${encodedEmail}&key=${key}`
@@ -184,7 +208,7 @@ app.post('/collection/create', function (req, res) {
       doc.create([], 'rich-text', (err2) => {
         if (err2) throw err2;
 
-        // Use another collection to store document metadata
+        // Use another collection to store document info (for now, name)
         let docinfo = new DocInfo({ docId: docId, name: req.body.name });
         docinfo.save();
         res.json({ docid: docId });
@@ -198,12 +222,12 @@ app.post('/collection/delete', function(req, res) {
     let docId = req.body.docid;
     let doc = connection.get('docs', docId); // ShareDB document
 
-    doc.fetch(async (err) => {
+    doc.fetch((err) => {
       if (err) throw err;
       if (doc.type == null) {
         res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
       } else {
-        await DocInfo.deleteOne({ id: docId });
+        DocInfo.deleteOne({ id: docId });
         doc.del(); // Sets doc.type to null
         doc.destroy(); // Removes doc object from memory
         res.json({});
@@ -242,7 +266,7 @@ app.get('/doc/edit/:docid', async function (req, res) {
 
     // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
     let docinfo = await DocInfo.findOne({ docId: docId });
-    if (!docinfo) { // Document does not exist
+    if (docinfo == null) { // Document does not exist
       res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
     } else {
       res.render('doc', {
@@ -265,63 +289,41 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     if (users_of_docs.has(docId))
       users_of_docs.get(docId).set(uid, res); 
     else { // Doc not tracked in map yet
-      let docMap = new Map();
-      docMap.set(uid, res);
-      users_of_docs.set(docId, docMap);
+      let users_of_doc = new Map();
+      users_of_doc.set(uid, res);
+      users_of_docs.set(docId, users_of_doc);
     }
 
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
-    doc.subscribe((err) => {
+    doc.subscribe(async (err) => {
       if (err) throw err;
       if (doc.type == null)
         return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
-      // doc.version is too slow, store doc version on initial load
-      if (!(docId in docVersions)) {
-        docVersions[docId] = doc.version;
-        // // Create Elasticsearch index if not exists
-        // esClient.indices.create({
-        //   index: 'documents',
-        //   body: { 
-        //     settings: {
-        //       analysis: {
-        //         analyzer: {
-        //           default: {
-        //             tokenizer: 'standard',
-        //             char_filter: ['html_strip'],
-        //             filter: ['lowercase', 'porter_stem', 'stop']
-        //           }
-        //         }
-        //       },
-        //     },
-        //   }
-        // }).catch(err => {
-        //   // Index already exists
-        // });
-      }
-
+      // doc.version is too slow, store doc version on initial load of doc
+      await redisClient.set(docId, doc.version);
       // Setup stream and provide initial document contents
       res.writeHead(200, streamHeaders); 
-      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
+      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
       
       let receiveOp = (op, source) => {
-        if (source !== uid)
+        if (source !== uid) {
           res.write(`data: ${JSON.stringify(op)}\n\n`);
+        }
       };
       
       doc.on('op', receiveOp);
-
-      // Remove connection upon closing
-      res.on('close', () => {
+      res.on('close', () => { // End connection
         doc.off('op', receiveOp);
         doc.unsubscribe();
         users_of_docs.get(docId).delete(uid);
 
         // Broadcast presence disconnection
-        for (let [otherUid, otherRes] of users_of_docs.get(docId)) {
+        let users_of_doc = users_of_docs.get(docId);
+        users_of_doc.forEach((otherRes, otherUid) => {
           otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
-        }
+        });
       });
     });
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
@@ -336,40 +338,41 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     let op = req.body.op;
 
     let doc = connection.get('docs', docId);
-    doc.fetch((err) => {
+    doc.fetch(async (err) => {
       if (err) throw err;
       else if (doc.type == null)
         return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-      if (version < docVersions[docId]) { // Reject and tell client to retry
-        return res.json({ status: 'retry' });
-      } else if (version > docVersions[docId]) {
-        return res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-      } else {
-        docVersions[docId]++; // Increment version, thereby locking document
+      let docVersion = await redisClient.get(docId);
+      if (version == docVersion) {
+        await redisClient.incr(docId);
         doc.submitOp(op, { source: uid }, async (err2) => {
           if (err2) throw err2;   
-          users_of_docs.get(docId).get(uid).write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+          let userThatSubmitted = users_of_docs.get(docId).get(uid);
+          if (userThatSubmitted != null) // In case user disconnected right when submitOp happened
+            userThatSubmitted.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
 
-          // // Index into Elasticsearch from time to time
+          // Index into Elasticsearch from time to time
           // if (docVersions[docId] % 20 === 0) {
           //   let docinfo = await DocInfo.findOne({ docId: docId });
           //   let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
           //   let html = converter.convert().toString();
-          //   await esClient.index({
-          //     index: 'documents',
+          //   esClient.index({
+          //     index: 'docs',
           //     id: docId,
           //     body: {
           //       docName: docinfo.name,
           //       contents: html,
           //     }
           //   });
-
-          //   await esClient.indices.refresh({ index: 'documents' });
           // }
 
           res.json({ status: 'ok' });
         });
+      } else if (version < docVersion) {
+        res.json({ status: 'retry' });
+      } else { // Shouldn't get to this point
+        res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
       }
     });
   } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
@@ -384,10 +387,10 @@ app.get('/doc/get/:docid/:uid', function (req, res) {
       if (doc.type == null)
         return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
-      res.set('Content-Type', 'text/html');
       const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
       const html = converter.convert();
 
+      res.set('Content-Type', 'text/html');
       res.send(Buffer.from(html));
     });
   } else res.json({ error: true, message: '[GET HTML] Session not found.' });
@@ -404,13 +407,11 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
   };
 
   // Broadcast presence to everyone else
-  let users = users_of_docs.get(docId);
-  if (users == null) return; // Avoid annoying error if I restart server
-  for (let [otherUid, otherRes] of users) {
-    if (uid !== otherUid) {
+  let users_of_doc = users_of_docs.get(docId);
+  users_of_doc.forEach((otherRes, otherUid) => {
+    if (uid !== otherUid)
       otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }}\n\n`);
-    }
-  }
+  });
 
   res.json({});
 });
@@ -429,8 +430,7 @@ app.post('/media/upload', function (req, res) {
       return res.json({error: true, message: '[UPLOAD] Only .png .jpg and .gif files allowed.' });
 
     let fileName = file.md5 + path.extname(file.name)
-    let filePath = `${__dirname}/public/img/${fileName}`;
-    file.mv(filePath, (err) => {
+    file.mv(`${__dirname}/public/img/${fileName}`, (err) => {
       if (err) throw err;
       res.json({ mediaid: fileName });
     });
@@ -456,7 +456,7 @@ app.get('/index/search', async function (req, res) {
       return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
     let results = await esClient.search({
-      index: 'documents',
+      index: 'docs',
       query: {
         bool: {
           should: [

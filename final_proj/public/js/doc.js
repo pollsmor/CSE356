@@ -11,7 +11,7 @@ const quill = new Quill('#editor', {
     toolbar: [ ['bold', 'italic'], ['image'] ],
     imageUpload: {
       url: '/media/upload',
-      // First callback obtains a media ID
+      // Callback obtains a media ID
       callbackOK: (res, next) => {
         next(`/media/access/${res.mediaid}`);
       }
@@ -42,20 +42,15 @@ quill.on('selection-change', (range, oldRange, source) => {
 const stream = new EventSource(`/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
   message = JSON.parse(message.data);
-
   if ('content' in message) { // Set initial editor contents
     quill.setContents(message.content);
     docVersion = message.version;
-  } 
-  
-  else if ('presence' in message) { // Presence change
+  } else if ('presence' in message) { // Presence change
     if (message.presence.cursor != null) {
       let selection = message.presence.cursor;
       quill.setSelection(selection.index, selection.length);
     }
-  } 
-  
-  else if ('ack' in message) { // Acknowledge this client's change
+  } else if ('ack' in message) { // Acknowledge this client's change
     docVersion++;
     queue.shift(); // Pop client's acknowledged op
 
@@ -66,9 +61,7 @@ stream.addEventListener('message', message => {
         version: docVersion
       });
     }
-  } 
-  
-  else { // Received op from server
+  } else { // Received op from server
     docVersion++;
     let incomingDelta = new Delta(message);
     if (queue.length === 0) {
@@ -90,11 +83,6 @@ stream.addEventListener('message', message => {
   }
 });
 
-stream.addEventListener('error', async () => {
-  await delay(1000);
-  window.location.reload();
-});
-
 // Don't want stream to persist after refreshing.
 addEventListener('beforeunload', () => {
   stream.close();
@@ -103,3 +91,10 @@ addEventListener('beforeunload', () => {
 function delay(time) {
   return new Promise(resolve => setTimeout(resolve, time));
 }
+
+stream.addEventListener('error', () => {
+  // Once connection to server is lost, refresh
+  delay(1000).then(() => {
+    window.location.reload();
+  });
+});

@@ -12,7 +12,6 @@ const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
 const { Client } = require('@elastic/elasticsearch');
-const redis = require('async-redis');
 
 // Mongoose models
 const User = require('./models/user');
@@ -64,11 +63,6 @@ esClient.indices.create({
   console.log('Index already exists.');
 });
 
-const redisClient = redis.createClient();
-redisClient.on('error', (err) => {
-  throw err;
-});
-
 // Middleware
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
@@ -87,6 +81,7 @@ app.use(function(req, res, next) {
 });
 
 // Constants
+const docVersions = {};
 const users_of_docs = new Map();
 const serverIp = '209.94.59.175'; // Easier to just hardcode this
 const streamHeaders = {
@@ -287,7 +282,8 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     }
 
     // doc.version is too slow, store doc version on initial load of doc
-    await redisClient.set(docId, doc.version);
+    if (!(docId in docVersions))
+      docVersions[docId] = doc.version;
 
     // Setup stream and provide initial document contents
     res.writeHead(200, streamHeaders); 
@@ -328,9 +324,8 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
     if (doc.type == null)
       return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-    let docVersion = await redisClient.get(docId);
-    if (version == docVersion) {
-      await redisClient.incr(docId);
+    if (version == docVersions[docId]) {
+      docVersions[docId]++;
       doc.submitOp(op, { source: uid }, async (err2) => {
         if (err2) throw err2;   
         // Index into Elasticsearch from time to time
@@ -350,7 +345,7 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
 
         res.json({ status: 'ok' });
       });
-    } else if (version < docVersion) {
+    } else if (version < docVersions[docId]) {
       res.json({ status: 'retry' });
     } else { // Shouldn't get to this point
       res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });

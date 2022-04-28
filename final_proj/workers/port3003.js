@@ -73,7 +73,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
-    await doc.subscribe();
+    await doc.fetch();
     if (doc.type == null)
       return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
@@ -93,14 +93,6 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     // Setup stream and provide initial document contents
     res.writeHead(200, streamHeaders); 
     res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
-    
-    let receiveOp = (op, source) => {
-      if (source !== uid)
-        res.write(`data: ${JSON.stringify(op)}\n\n`);
-      else 
-        res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-    };
-    doc.on('op', receiveOp);
 
     res.on('close', () => { // End connection
       // Broadcast presence disconnection
@@ -109,9 +101,6 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
       users_of_doc.forEach((otherRes, otherUid) => {
         otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
       });
-
-      doc.unsubscribe();
-      doc.off('op', receiveOp);
     });
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
@@ -147,6 +136,14 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
       //     }
       //   });
       // }
+
+      let users_of_doc = users_of_docs.get(docId);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        if (uid !== otherUid)
+          otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
+        else 
+          otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+      });
 
       res.json({ status: 'ok' });
     } else if (version < docVersions[docId]) {

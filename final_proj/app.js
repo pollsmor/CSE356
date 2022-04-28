@@ -312,7 +312,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     res.on('close', () => { // End connection
       // Broadcast presence disconnection
       let users_of_doc = users_of_docs.get(docId);
-      user_of_doc.delete(uid);
+      users_of_doc.delete(uid);
       users_of_doc.forEach((otherRes, otherUid) => {
         otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
       });

@@ -20,34 +20,7 @@ ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
 
-// Create Elasticsearch index if not exists
 const esClient = new Client({ node: 'http://localhost:9200' });
-esClient.indices.create({
-  index: 'docs',
-  body: { 
-    settings: {
-      analysis: {
-        analyzer: {
-          my_analyzer: {
-            tokenizer: 'standard',
-            char_filter: ['html_strip'],
-            filter: ['lowercase', 'porter_stem', 'stop']
-          }
-        }
-      },
-    },
-    mappings: {
-      properties: {
-        contents: {
-          type: 'text',
-          analyzer: 'my_analyzer'
-        }
-      }
-    }
-  }
-}).catch(err => {
-  console.log('Index already exists.');
-});
 
 const app = express();
 const port = 3002;
@@ -89,9 +62,12 @@ app.get('/doc/edit/:docid', async function (req, res) {
   } else res.json({ error: true, message: '[EDIT DOC] Session not found.' });
 });
 
+function delay(time) {
+  return new Promise(resolve => setTimeout(resolve, time));
+}
+
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', async function (req, res) {
-  console.log('xaxaxaxaxaxa');
   if (req.session.name) {
     let docId = req.params.docid;
     let uid = req.params.uid;
@@ -99,7 +75,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
     await doc.fetch();
-    console.log(doc);
+    await delay(5);
     if (doc.type == null)
       return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 

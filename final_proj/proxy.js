@@ -7,7 +7,7 @@ Port 3001: Contains stateless services (i.e. login)
 Port 3002-whatever: Proxies for every core
 */
 const app = express();
-const coreCount = os.cpus().length;
+const coreCount = 1;
 const proxyPort = 3000;
 const statelessPort = 3001;
 const proxy = require('http-proxy').createProxyServer({ 

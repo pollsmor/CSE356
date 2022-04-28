@@ -1,14 +1,11 @@
 const mongoUri = 'mongodb://localhost:27017/final';
 
-const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
-const WebSocket = require('ws');
-const WebSocketJSONStream = require('@teamwork/websocket-json-stream');
 const nodemailer = require('nodemailer');
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html')
 const fileUpload = require('express-fileupload');
@@ -25,16 +22,11 @@ const DocInfo = require('./models/docinfo'); // For now, only to store doc name
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
-// Setup ShareDB and connect to it via WebSockets
+// Setup ShareDB
 const app = express();
-const server = http.createServer(app);
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
-const wss = new WebSocket.Server({ server: server });
-wss.on('connection', (ws) => {
-  backend.listen(new WebSocketJSONStream(ws));
-});
 
 // Connect to local Postfix mail server
 const transport = nodemailer.createTransport({
@@ -104,7 +96,7 @@ const streamHeaders = {
   'X-Accel-Buffering': 'no'
 };
 
-server.listen(3000, () => {
+app.listen(3000, () => {
   console.log('Google Docs Clone is now running.');
 });
 

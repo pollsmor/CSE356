@@ -37,8 +37,6 @@ $ npm install connect-mongodb-session
 $ npm install ejs
 $ npm install sharedb
 $ npm install sharedb-mongo
-$ npm install ws
-$ npm install @teamwork/websocket-json-stream
 $ npm install rich-text
 $ npm install nodemailer
 $ npm install quill-delta-to-html
@@ -47,3 +45,4 @@ $ npm install path
 $ npm install fs
 $ npm install @elastic/elasticsearch
 $ npm install async-redis
+$ npm install http-proxy

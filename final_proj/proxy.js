@@ -6,7 +6,7 @@ Port 3001: Contains stateless services (i.e. login)
 Port 3002-whatever: Proxies for every core
 */
 const app = express();
-const coreCount = 1; // Modify this when needed
+const coreCount = 2; // Modify this when needed
 const proxyPort = 3000;
 const statelessPort = 3001;
 const proxy = require('http-proxy').createProxyServer({ 
@@ -67,6 +67,22 @@ app.use('/doc/op/:docid/:uid', function (req, res, next) {
   let chosenPort = statelessPort + coreAssignedToDocs[docId];
   proxy.web(req, res, {
     target: `http://localhost:${selectPort(docId)}/doc/op/${docId}/${req.params.uid}`
+  }, next);
+});
+
+app.use('/doc/get/:docid/:uid', function (req, res, next) {
+  let docId = req.params.docid;
+  let chosenPort = statelessPort + coreAssignedToDocs[docId];
+  proxy.web(req, res, {
+    target: `http://localhost:${selectPort(docId)}/doc/get/${docId}/${req.params.uid}`
+  }, next);
+});
+
+app.use('/doc/presence/:docid/:uid', function (req, res, next) {
+  let docId = req.params.docid;
+  let chosenPort = statelessPort + coreAssignedToDocs[docId];
+  proxy.web(req, res, {
+    target: `http://localhost:${selectPort(docId)}/doc/presence/${docId}/${req.params.uid}`
   }, next);
 });
 

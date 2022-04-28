@@ -6,6 +6,10 @@ const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const nodemailer = require('nodemailer');
+const fileUpload = require('express-fileupload');
+const path = require('path');
+const fs = require('fs');
+const { Client } = require('@elastic/elasticsearch');
 
 // Mongoose models
 const User = require('./models/user');
@@ -27,6 +31,35 @@ const transport = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 });
 
+// Create Elasticsearch index if not exists
+const esClient = new Client({ node: 'http://localhost:9200' });
+esClient.indices.create({
+  index: 'docs',
+  body: { 
+    settings: {
+      analysis: {
+        analyzer: {
+          my_analyzer: {
+            tokenizer: 'standard',
+            char_filter: ['html_strip'],
+            filter: ['lowercase', 'porter_stem', 'stop']
+          }
+        }
+      },
+    },
+    mappings: {
+      properties: {
+        contents: {
+          type: 'text',
+          analyzer: 'my_analyzer'
+        }
+      }
+    }
+  }
+}).catch(err => {
+  console.log('Index already exists.');
+});
+
 const app = express();
 const port = 3001;
 const serverIp = '209.94.59.175'; // Easier to just hardcode this
@@ -35,6 +68,7 @@ const serverIp = '209.94.59.175'; // Easier to just hardcode this
 app.set('view engine', 'ejs');
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
+app.use(fileUpload({ createParentPath: true, abortOnLimit: true }));
 app.use(session({
   secret: 'secret',
   store: store,
@@ -187,4 +221,69 @@ app.get('/collection/list', async function (req, res) {
       res.json(output);
     });
   } else res.json({ error: true, message: '[DOC LIST] No session found.' });
+});
+
+// =====================================================================
+// Media routes
+app.post('/media/upload', function (req, res) {
+  if (req.session.name) {
+    if (!req.files)
+      return res.json({ error: true, message: '[UPLOAD] No file uploaded.' });
+
+    let file = req.files.image; // doc.js's image uploading for client uses .image
+    if (file == null) file = req.files.file;
+    let mime = file.mimetype;
+    if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/gif')
+      return res.json({error: true, message: '[UPLOAD] Only .png .jpg and .gif files allowed.' });
+
+    let fileName = file.md5 + path.extname(file.name);
+    file.mv(`${__dirname}/public/img/${fileName}`, (err) => {
+      if (err) throw err;
+      res.json({ mediaid: fileName });
+    });
+  } else res.json({ error: true, message: '[UPLOAD] Session not found.' });
+});
+
+app.get('/media/access/:mediaid', async function (req, res) {
+  if (req.session.name) {
+    let fileName = req.params.mediaid;
+    let filePath = __dirname + '/public/img/' + fileName;
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });
+  } else res.json({ error: true, message: '[VIEW MEDIA] Session not found.' });
+});
+
+// =====================================================================
+// Milestone 3: Search/Suggest
+app.get('/index/search', async function (req, res) {
+  if (req.session.name) {
+    let word = req.query.q;
+    if (word == null) 
+      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+
+    let results = await esClient.search({
+      index: 'docs',
+      query: {
+        bool: {
+          should: [
+            { prefix: { docName: word }},
+            { prefix: { contents: word }}
+          ]
+        }
+      },
+      highlight: {
+        fields: { contents: {}}
+      },
+      size: 10
+    });
+
+    res.json(results);
+  } else res.json({ error: true, message: '[SEARCH] Session not found.' });
+});
+
+app.get('/index/suggest', function (req, res) {
+  if (req.session.name) {
+    
+  } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });

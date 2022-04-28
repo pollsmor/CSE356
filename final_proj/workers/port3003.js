@@ -5,9 +5,10 @@ const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
+const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html')
 
 // Mongoose models
-const DocInfo = require('./models/docinfo'); // For now, only to store doc name
+const DocInfo = require('../models/docinfo'); // For now, only to store doc name
 
 // Session handling
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
@@ -19,7 +20,7 @@ const backend = new ShareDB({db});
 const connection = backend.connect();
 
 const app = express();
-const port = 3002;
+const port = 3003;
 const users_of_docs = new Map();
 const docVersions = {};
 const streamHeaders = {
@@ -154,4 +155,40 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
       res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
     }
   } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
+});
+
+// Get HTML of current document
+app.get('/doc/get/:docid/:uid', async function (req, res) {
+  if (req.session.name) {
+    let doc = connection.get('docs', req.params.docid);
+    await doc.fetch();
+    if (doc.type == null)
+      return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
+
+    const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+    const html = converter.convert();
+
+    res.set('Content-Type', 'text/html');
+    res.send(Buffer.from(html));
+  } else res.json({ error: true, message: '[GET HTML] Session not found.' });
+});
+
+// Presence
+app.post('/doc/presence/:docid/:uid', async function(req, res) {
+  let docId = req.params.docid;
+  let uid = req.params.uid;
+  let presenceData = {
+    index: req.body.index,
+    length: req.body.length,
+    name: uid
+  };
+
+  // Broadcast presence to everyone else
+  let users_of_doc = users_of_docs.get(docId);
+  users_of_doc.forEach((otherRes, otherUid) => {
+    if (uid !== otherUid)
+      otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }}\n\n`);
+  });
+
+  res.json({});
 });

@@ -1,0 +1,20 @@
+{
+  "apps": [
+    {
+      "name": "proxy",
+      "script": "./proxy.js"
+    },
+    {
+      "name": "stateless",
+      "script": "./stateless.js"
+    },
+    {
+      "name": "port3002",
+      "script": "./workers/port3002.js"
+    },
+    {
+      "name": "port3003",
+      "script": "./workers/port3003.js"
+    }
+  ]
+}

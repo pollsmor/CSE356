@@ -50,7 +50,7 @@ esClient.indices.create({
 });
 
 const app = express();
-const port = 3002;
+const port = 3004;
 const users_of_docs = new Map();
 const docVersions = {};
 
@@ -99,10 +99,10 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
     await doc.fetch();
-    console.log(doc);
     if (doc.type == null)
       return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
+    // Tie res object to doc
     if (users_of_docs.has(docId)) {
       users_of_docs.get(docId).set(uid, res);
     } else { // Doc not tracked yet

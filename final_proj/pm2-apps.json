@@ -15,6 +15,14 @@
     {
       "name": "port3003",
       "script": "./workers/port3003.js"
+    },
+    {
+      "name": "port3004",
+      "script": "./workers/port3004.js"
+    },
+    {
+      "name": "port3005",
+      "script": "./workers/port3005.js"
     }
   ]
 }

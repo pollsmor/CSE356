@@ -95,6 +95,6 @@ function delay(time) {
 stream.addEventListener('error', () => {
   // Once connection to server is lost, refresh
   delay(1000).then(() => {
-    window.location.reload();
+    //window.location.reload();
   });
 });

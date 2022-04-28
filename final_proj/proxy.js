@@ -1,4 +1,5 @@
 const express = require('express');
+const os = require('os');
 
 /*
 Port 3000: This proxy server
@@ -6,13 +7,19 @@ Port 3001: Contains stateless services (i.e. login)
 Port 3002-whatever: Proxies for every core
 */
 const app = express();
-const coreCount = 2; // Modify this when needed
+const coreCount = os.cpus().length;
 const proxyPort = 3000;
 const statelessPort = 3001;
 const proxy = require('http-proxy').createProxyServer({ 
   host: 'http://teamsolokid.cse356.compas.cs.stonybrook.edu',
   port: proxyPort
 });
+const streamHeaders = {
+  'Content-Type': 'text/event-stream',
+  'Connection': 'keep-alive',
+  'Cache-Control': 'no-cache',
+  'X-Accel-Buffering': 'no'
+};
 
 // Assign new documents to cores equally
 const coreAssignedToDocs = {};
@@ -53,9 +60,10 @@ app.use('/doc/connect/:docid/:uid', function (req, res, next) {
   let docId = req.params.docid;
   if (!(docId in coreAssignedToDocs)) {
     coreAssignedToDocs[docId] = coreIdx++;
-    if (coreIdx == coreCount) coreIdx = 0;
+    if (coreIdx === coreCount) coreIdx = 0;
   }
 
+  res.writeHead(200, streamHeaders);
   let chosenPort = coreAssignedToDocs[docId];
   proxy.web(req, res, {
     target: `http://localhost:${selectPort(docId)}/doc/connect/${docId}/${req.params.uid}`

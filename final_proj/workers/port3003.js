@@ -5,7 +5,8 @@ const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
-const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html')
+const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
+const { Client } = require('@elastic/elasticsearch');
 
 // Mongoose models
 const DocInfo = require('../models/docinfo'); // For now, only to store doc name
@@ -19,16 +20,39 @@ ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
 
+// Create Elasticsearch index if not exists
+const esClient = new Client({ node: 'http://localhost:9200' });
+esClient.indices.create({
+  index: 'docs',
+  body: { 
+    settings: {
+      analysis: {
+        analyzer: {
+          my_analyzer: {
+            tokenizer: 'standard',
+            char_filter: ['html_strip'],
+            filter: ['lowercase', 'porter_stem', 'stop']
+          }
+        }
+      },
+    },
+    mappings: {
+      properties: {
+        contents: {
+          type: 'text',
+          analyzer: 'my_analyzer'
+        }
+      }
+    }
+  }
+}).catch(err => {
+  console.log('Index already exists.');
+});
+
 const app = express();
 const port = 3003;
 const users_of_docs = new Map();
 const docVersions = {};
-const streamHeaders = {
-  'Content-Type': 'text/event-stream',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'X-Accel-Buffering': 'no'
-};
 
 // Middleware
 app.set('view engine', 'ejs');
@@ -67,6 +91,7 @@ app.get('/doc/edit/:docid', async function (req, res) {
 
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', async function (req, res) {
+  console.log('xaxaxaxaxaxa');
   if (req.session.name) {
     let docId = req.params.docid;
     let uid = req.params.uid;
@@ -87,20 +112,20 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     }
 
     // doc.version is too slow, store doc version on initial load of doc
-    if (!(docId in docVersions))
+    if (!(docId in docVersions)) {
       docVersions[docId] = doc.version;
+    }
 
     // Setup stream and provide initial document contents
-    res.writeHead(200, streamHeaders); 
     res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${docVersions[docId]} }\n\n`);
 
     res.on('close', () => { // End connection
       // Broadcast presence disconnection
       let users_of_doc = users_of_docs.get(docId);
       users_of_doc.delete(uid);
-      users_of_doc.forEach((otherRes, otherUid) => {
+      for (let [otherUid, otherRes] of users_of_doc) {
         otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
-      });
+      }
     });
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
@@ -123,27 +148,27 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
       await doc.submitOp(op, { source: uid });
 
       // Index into Elasticsearch from time to time
-      // if (docVersions[docId] % 20 === 0) {
-      //   let docinfo = await DocInfo.findOne({ docId: docId });
-      //   let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-      //   let html = converter.convert().toString();
-      //   esClient.index({
-      //     index: 'docs',
-      //     id: docId,
-      //     body: {
-      //       docName: docinfo.name,
-      //       contents: html,
-      //     }
-      //   });
-      // }
+      if (docVersions[docId] % 20 === 0) {
+        let docinfo = await DocInfo.findOne({ docId: docId });
+        let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+        let html = converter.convert().toString();
+        esClient.index({
+          index: 'docs',
+          id: docId,
+          body: {
+            docName: docinfo.name,
+            contents: html,
+          }
+        });
+      }
 
       let users_of_doc = users_of_docs.get(docId);
-      users_of_doc.forEach((otherRes, otherUid) => {
+      for (let [otherUid, otherRes] of users_of_doc) {
         if (uid !== otherUid)
           otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
         else 
           otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-      });
+      }
 
       res.json({ status: 'ok' });
     } else if (version < docVersions[docId]) {
@@ -182,10 +207,13 @@ app.post('/doc/presence/:docid/:uid', async function(req, res) {
 
   // Broadcast presence to everyone else
   let users_of_doc = users_of_docs.get(docId);
-  users_of_doc.forEach((otherRes, otherUid) => {
+  if (users_of_doc == null)
+    return res.json({ error: true, message: '[PRESENCE] Document is not tracked.' });
+
+  for (let [otherUid, otherRes] of users_of_doc) {
     if (uid !== otherUid)
       otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${JSON.stringify(presenceData)} }}\n\n`);
-  });
+  }
 
   res.json({});
 });

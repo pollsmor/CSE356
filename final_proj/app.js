@@ -329,19 +329,19 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
       doc.submitOp(op, { source: uid }, async (err2) => {
         if (err2) throw err2;   
         // Index into Elasticsearch from time to time
-        // if (docVersions[docId] % 20 === 0) {
-        //   let docinfo = await DocInfo.findOne({ docId: docId });
-        //   let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-        //   let html = converter.convert().toString();
-        //   esClient.index({
-        //     index: 'docs',
-        //     id: docId,
-        //     body: {
-        //       docName: docinfo.name,
-        //       contents: html,
-        //     }
-        //   });
-        // }
+        if (docVersions[docId] % 20 === 0) {
+          let docinfo = await DocInfo.findOne({ docId: docId });
+          let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+          let html = converter.convert().toString();
+          esClient.index({
+            index: 'docs',
+            id: docId,
+            body: {
+              docName: docinfo.name,
+              contents: html,
+            }
+          });
+        }
 
         res.json({ status: 'ok' });
       });

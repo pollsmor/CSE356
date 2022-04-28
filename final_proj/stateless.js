@@ -29,10 +29,10 @@ const transport = nodemailer.createTransport({
 
 const app = express();
 const port = 3001;
+const serverIp = '209.94.59.175'; // Easier to just hardcode this
 
 // Middleware
 app.set('view engine', 'ejs');
-app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
 app.use(session({
@@ -41,10 +41,6 @@ app.use(session({
   resave: false,
   saveUninitialized: false
 }));
-app.use(function(req, res, next) {
-  res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
-  next(); // Set ID header for every route
-});
 
 function randomStr() {
   return Math.random().toString(36).slice(2);
@@ -54,6 +50,8 @@ app.listen(port, () => {
   console.log(`Stateless services running on port ${port}.`);
 });
 
+// =====================================================================
+// Just for convenience, grading script actually uses /home for JSON response
 app.get('/', function (req, res) {
   if (req.session.name) {
     res.render('home', {

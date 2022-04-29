@@ -12,6 +12,7 @@ const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
 const { Client } = require('@elastic/elasticsearch');
+const { convert } = require('html-to-text');
 
 // Mongoose models
 const User = require('./models/user');
@@ -55,6 +56,10 @@ esClient.indices.create({
         contents: {
           type: 'text',
           analyzer: 'my_analyzer'
+        },
+        suggest: {
+          type: 'completion',
+          analyzer: 'my_analyzer'
         }
       }
     }
@@ -83,7 +88,7 @@ app.use(function(req, res, next) {
 // Constants
 const docVersions = {};
 const users_of_docs = new Map();
-const serverIp = '209.94.59.175'; // Easier to just hardcode this
+const serverIp = '209.94.58.105'; // Easier to just hardcode this
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
@@ -186,17 +191,18 @@ app.post('/collection/create', async function (req, res) {
   if (req.session.name) {
     let docId = randomStr(); // Since documents can share names
     let doc = connection.get('docs', docId); // ShareDB document
-    await doc.fetch();
-    if (doc.type != null) { // Just in case randomStr() generates the same docId somehow
-      res.json({ error: true, message: '[CREATE DOC] Please try again.' });
-    } else {
-      await doc.create([], 'rich-text');
-
-      // Use another collection to store document info (for now, name)
-      let docinfo = new DocInfo({ docId: docId, name: req.body.name });
-      docinfo.save();
-      res.json({ docid: docId });
-    }
+    doc.fetch((err) => {
+      if (doc.type != null) { // Just in case randomStr() generates the same docId somehow
+        res.json({ error: true, message: '[CREATE DOC] Please try again.' });
+      } else {
+        doc.create([], 'rich-text');
+  
+        // Use another collection to store document info (for now, name)
+        let docinfo = new DocInfo({ docId: docId, name: req.body.name });
+        docinfo.save();
+        res.json({ docid: docId });
+      }
+    });
   } else res.json({ error: true, message: '[CREATE DOC] No session found.' });
 });
 
@@ -205,15 +211,17 @@ app.post('/collection/delete', async function(req, res) {
     let docId = req.body.docid;
     let doc = connection.get('docs', docId); // ShareDB document
 
-    await doc.fetch();
-    if (doc.type == null) {
-      res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
-    } else {
-      DocInfo.deleteOne({ id: docId });
-      doc.del(); // Sets doc.type to null
-      doc.destroy(); // Removes doc object from memory
-      res.json({});
-    }
+    doc.fetch((err) => {
+      if (doc.type == null) {
+        res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
+      } else {
+        DocInfo.deleteOne({ id: docId });
+        doc.del(); // Sets doc.type to null
+        doc.destroy(); // Removes doc object from memory
+        docVersions.delete(docId);
+        res.json({});
+      }
+    });
   } else res.json({ error: true, message: '[DELETE DOC] No session found.' });
 });
 
@@ -268,45 +276,36 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 
     // Get whole document on initial load
     let doc = connection.get('docs', docId);
-    await doc.subscribe();
-    if (doc.type == null)
+    doc.fetch((err) => {
+      if (err) throw err;
+      else if (doc.type == null)
       return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
-    // Tie res object to doc
-    if (users_of_docs.has(docId)) {
-      users_of_docs.get(docId).set(uid, res);
-    } else { // Doc not tracked yet
-      let users_of_doc = new Map();
-      users_of_doc.set(uid, res);
-      users_of_docs.set(docId, users_of_doc);
-    }
+      // Tie res object to doc
+      if (users_of_docs.has(docId)) {
+        users_of_docs.get(docId).set(uid, res);
+      } else { // Doc not tracked yet
+        let users_of_doc = new Map();
+        users_of_doc.set(uid, res);
+        users_of_docs.set(docId, users_of_doc);
+      }
 
-    // doc.version is too slow, store doc version on initial load of doc
-    if (!(docId in docVersions))
-      docVersions[docId] = doc.version;
+      // doc.version is too slow, store doc version on initial load of doc
+      if (!(docId in docVersions))
+        docVersions[docId] = doc.version;
 
-    // Setup stream and provide initial document contents
-    res.writeHead(200, streamHeaders); 
-    res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
-    
-    let receiveOp = (op, source) => {
-      if (source !== uid)
-        res.write(`data: ${JSON.stringify(op)}\n\n`);
-      else 
-        res.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
-    };
-    doc.on('op', receiveOp);
-
-    res.on('close', () => { // End connection
-      // Broadcast presence disconnection
-      let users_of_doc = users_of_docs.get(docId);
-      users_of_doc.delete(uid);
-      users_of_doc.forEach((otherRes, otherUid) => {
-        otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
+      // Setup stream and provide initial document contents
+      res.writeHead(200, streamHeaders); 
+      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+  
+      res.on('close', () => {
+        // Broadcast presence disconnection
+        let users_of_doc = users_of_docs.get(docId);
+        users_of_doc.delete(uid);
+        users_of_doc.forEach((otherRes, otherUid) => {
+          otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
+        });
       });
-
-      doc.unsubscribe();
-      doc.off('op', receiveOp);
     });
   } else res.json({ error: true, message: '[SETUP STREAM] Session not found' });
 });
@@ -320,36 +319,32 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
     let op = req.body.op;
 
     let doc = connection.get('docs', docId);
-    await doc.fetch();
-    if (doc.type == null)
-      return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
+    doc.fetch((err) => {
+      if (err) throw err;
+      else if (doc.type == null)
+        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-    if (version == docVersions[docId]) {
-      docVersions[docId]++;
-      doc.submitOp(op, { source: uid }, async (err2) => {
-        if (err2) throw err2;   
-        // Index into Elasticsearch from time to time
-        if (docVersions[docId] % 20 === 0) {
-          let docinfo = await DocInfo.findOne({ docId: docId });
-          let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-          let html = converter.convert().toString();
-          esClient.index({
-            index: 'docs',
-            id: docId,
-            body: {
-              docName: docinfo.name,
-              contents: html,
-            }
+      if (version == docVersions[docId]) {
+        docVersions[docId]++;
+        doc.submitOp(op, { source: uid }, async (err2) => {
+          if (err2) throw err2;   
+
+          let users_of_doc = users_of_docs.get(docId);
+          users_of_doc.forEach((otherRes, otherUid) => {
+            if (uid !== otherUid)
+              otherRes.write(`data: ${JSON.stringify(op)}\n\n`);
+            else 
+              otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
           });
-        }
 
-        res.json({ status: 'ok' });
-      });
-    } else if (version < docVersions[docId]) {
-      res.json({ status: 'retry' });
-    } else { // Shouldn't get to this point
-      res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-    }
+          res.json({ status: 'ok' });
+        });
+      } else if (version < docVersions[docId]) {
+        res.json({ status: 'retry' });
+      } else { // Shouldn't get to this point
+        res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+      }
+    });
   } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
 });
 
@@ -357,15 +352,16 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
 app.get('/doc/get/:docid/:uid', async function (req, res) {
   if (req.session.name) {
     let doc = connection.get('docs', req.params.docid);
-    await doc.fetch();
-    if (doc.type == null)
+    doc.fetch((err) => {
+      if (doc.type == null)
       return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
-    const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-    const html = converter.convert();
+      const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+      const html = converter.convert();
 
-    res.set('Content-Type', 'text/html');
-    res.send(Buffer.from(html));
+      res.set('Content-Type', 'text/html');
+      res.send(Buffer.from(html));
+    });
   } else res.json({ error: true, message: '[GET HTML] Session not found.' });
 });
 
@@ -424,8 +420,8 @@ app.get('/media/access/:mediaid', async function (req, res) {
 // Milestone 3: Search/Suggest
 app.get('/index/search', async function (req, res) {
   if (req.session.name) {
-    let word = req.query.q;
-    if (word == null) 
+    let phrase = req.query.q;
+    if (phrase == null) 
       return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
     let results = await esClient.search({
@@ -433,23 +429,99 @@ app.get('/index/search', async function (req, res) {
       query: {
         bool: {
           should: [
-            { prefix: { docName: word }},
-            { prefix: { contents: word }}
+            { 
+              match: { 
+                contents: phrase
+              }
+            },
+            { 
+              match: {
+                 docName: phrase 
+              }
+            }
           ]
         }
       },
+      fields: ['docName', 'contents'],
+      _source: false,
       highlight: {
-        fields: { contents: {}}
+        fields: { 
+          contents: {}
+        }
       },
       size: 10
     });
 
-    res.json(results);
+    results = results.hits.hits;
+    let output = await Promise.all(results.map(async (r) => {
+      let docId = r._id;
+      let docinfo = await DocInfo.findOne({ docId: docId });
+      let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
+
+      return {
+        docid: docId,
+        name: docinfo.name,
+        snippet: snippet
+      };
+    }));
+
+    res.json(output);
   } else res.json({ error: true, message: '[SEARCH] Session not found.' });
 });
 
-app.get('/index/suggest', function (req, res) {
+app.get('/index/suggest', async function (req, res) {
   if (req.session.name) {
-    
+    let phrase = req.query.q;
+    if (phrase == null) 
+      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+
+    let results = await esClient.search({
+      _source: false,
+      suggest: {
+        suggestion: {
+          prefix: phrase,
+          completion: {
+            field: 'suggest',
+            fuzzy: {
+              fuzziness: 2
+            }
+          }
+        }
+      },
+      _source: false
+    });
+
+    results = results.suggest.suggestion[0].options;
+
+    let output = results.map((r) => {
+      return r.text;
+    });
+
+    res.json(output);
   } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });
+
+// Index into Elasticsearch from time to time
+setInterval(() => {
+  Object.keys(docVersions).forEach((docId) => {
+    let doc = connection.get('docs', docId);
+    doc.fetch(async (err) => {
+      if (err) throw err;
+      let docinfo = await DocInfo.findOne({ docId: docId });
+      let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+      let html = convert(converter.convert());
+      let words = html.split(/\s+/);
+      esClient.index({
+        index: 'docs',
+        id: docId,
+        body: {
+          docName: docinfo.name,
+          contents: html,
+          suggest: words
+        }
+      });
+
+      esClient.indices.refresh({ index: 'docs' });
+    });
+  })
+}, 5000);

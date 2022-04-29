@@ -62,7 +62,7 @@ esClient.indices.create({
 
 const app = express();
 const port = 3001;
-const serverIp = '209.94.59.175'; // Easier to just hardcode this
+const serverIp = '209.94.58.105'; // Easier to just hardcode this
 
 // Middleware
 app.set('view engine', 'ejs');
@@ -286,4 +286,8 @@ app.get('/index/suggest', function (req, res) {
   if (req.session.name) {
     
   } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
+});
+
+app.post('/elastic', function (req, res) {
+
 });

@@ -7,7 +7,7 @@ const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const nodemailer = require('nodemailer');
-const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html')
+const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
 const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
@@ -523,5 +523,5 @@ setInterval(() => {
 
       esClient.indices.refresh({ index: 'docs' });
     });
-  })
+  });
 }, 5000);

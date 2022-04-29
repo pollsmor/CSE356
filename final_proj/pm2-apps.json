@@ -7,6 +7,10 @@
     {
       "name": "stateless",
       "script": "./stateless.js"
+    },
+    {
+      "name": "worker",
+      "script": "./worker.js"
     }
   ]
 }

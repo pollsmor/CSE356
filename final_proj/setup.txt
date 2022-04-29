@@ -36,3 +36,4 @@ $ npm install path
 $ npm install fs
 $ npm install @elastic/elasticsearch
 $ npm install http-proxy
+$ npm install axios

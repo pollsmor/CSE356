@@ -1,15 +1,18 @@
 const mongoUri = 'mongodb://localhost:27017/final';
+
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
+const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
 const nodemailer = require('nodemailer');
 const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
 const { Client } = require('@elastic/elasticsearch');
+const { convert } = require('html-to-text');
 
 // Mongoose models
 const User = require('./models/user');
@@ -20,6 +23,7 @@ mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
 // Setup ShareDB
+const app = express();
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
@@ -52,6 +56,10 @@ esClient.indices.create({
         contents: {
           type: 'text',
           analyzer: 'my_analyzer'
+        },
+        suggest: {
+          type: 'completion',
+          analyzer: 'my_analyzer'
         }
       }
     }
@@ -60,12 +68,9 @@ esClient.indices.create({
   console.log('Index already exists.');
 });
 
-const app = express();
-const port = 3001;
-const serverIp = '209.94.58.105'; // Easier to just hardcode this
-
 // Middleware
 app.set('view engine', 'ejs');
+app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
 app.use(fileUpload({ createParentPath: true, abortOnLimit: true }));
@@ -76,16 +81,17 @@ app.use(session({
   saveUninitialized: false
 }));
 
+const serverIp = '209.94.58.105'; // Easier to just hardcode this
+app.listen(3001, () => {
+  console.log('Stateless services running on port 3001.');
+});
+
 function randomStr() {
   return Math.random().toString(36).slice(2);
 }
 
-app.listen(port, () => {
-  console.log(`Stateless services running on port ${port}.`);
-});
-
-// =====================================================================
-// Just for convenience, grading script actually uses /home for JSON response
+// Routes ====================================================================
+// Route just for convenience
 app.get('/', function (req, res) {
   if (req.session.name) {
     res.render('home', {
@@ -104,6 +110,7 @@ app.get('/home', function (req, res) {
   } else res.json({ error: true, message: '[HOME] Session not found.' });
 });
 
+// User routes
 app.post('/users/login', async function (req, res) {
   // Try to log in with provided credentials
   let user = await User.findOne({ email: req.body.email });
@@ -170,17 +177,18 @@ app.post('/collection/create', async function (req, res) {
   if (req.session.name) {
     let docId = randomStr(); // Since documents can share names
     let doc = connection.get('docs', docId); // ShareDB document
-    await doc.fetch();
-    if (doc.type != null) { // Just in case randomStr() generates the same docId somehow
-      res.json({ error: true, message: '[CREATE DOC] Please try again.' });
-    } else {
-      await doc.create([], 'rich-text');
-
-      // Use another collection to store document info (for now, name)
-      let docinfo = new DocInfo({ docId: docId, name: req.body.name });
-      docinfo.save();
-      res.json({ docid: docId });
-    }
+    doc.fetch((err) => {
+      if (doc.type != null) { // Just in case randomStr() generates the same docId somehow
+        res.json({ error: true, message: '[CREATE DOC] Please try again.' });
+      } else {
+        doc.create([], 'rich-text');
+  
+        // Use another collection to store document info (for now, name)
+        let docinfo = new DocInfo({ docId: docId, name: req.body.name });
+        docinfo.save();
+        res.json({ docid: docId });
+      }
+    });
   } else res.json({ error: true, message: '[CREATE DOC] No session found.' });
 });
 
@@ -189,15 +197,16 @@ app.post('/collection/delete', async function(req, res) {
     let docId = req.body.docid;
     let doc = connection.get('docs', docId); // ShareDB document
 
-    await doc.fetch();
-    if (doc.type == null) {
-      res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
-    } else {
-      DocInfo.deleteOne({ id: docId });
-      doc.del(); // Sets doc.type to null
-      doc.destroy(); // Removes doc object from memory
-      res.json({});
-    }
+    doc.fetch((err) => {
+      if (doc.type == null) {
+        res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
+      } else {
+        DocInfo.deleteOne({ id: docId });
+        doc.del(); // Sets doc.type to null
+        doc.destroy(); // Removes doc object from memory
+        res.json({});
+      }
+    });
   } else res.json({ error: true, message: '[DELETE DOC] No session found.' });
 });
 
@@ -236,7 +245,7 @@ app.post('/media/upload', function (req, res) {
     if (mime !== 'image/png' && mime !== 'image/jpeg' && mime !== 'image/gif')
       return res.json({error: true, message: '[UPLOAD] Only .png .jpg and .gif files allowed.' });
 
-    let fileName = file.md5 + path.extname(file.name);
+    let fileName = file.md5 + path.extname(file.name)
     file.mv(`${__dirname}/public/img/${fileName}`, (err) => {
       if (err) throw err;
       res.json({ mediaid: fileName });
@@ -258,8 +267,8 @@ app.get('/media/access/:mediaid', async function (req, res) {
 // Milestone 3: Search/Suggest
 app.get('/index/search', async function (req, res) {
   if (req.session.name) {
-    let word = req.query.q;
-    if (word == null) 
+    let phrase = req.query.q;
+    if (phrase == null) 
       return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
     let results = await esClient.search({
@@ -267,27 +276,102 @@ app.get('/index/search', async function (req, res) {
       query: {
         bool: {
           should: [
-            { prefix: { docName: word }},
-            { prefix: { contents: word }}
+            { 
+              match: { 
+                contents: phrase
+              }
+            },
+            { 
+              match: {
+                 docName: phrase 
+              }
+            }
           ]
         }
       },
+      fields: ['docName', 'contents'],
+      _source: false,
       highlight: {
-        fields: { contents: {}}
+        fields: { 
+          contents: {}
+        }
       },
       size: 10
     });
 
-    res.json(results);
+    results = results.hits.hits;
+    let output = await Promise.all(results.map(async (r) => {
+      let docId = r._id;
+      let docinfo = await DocInfo.findOne({ docId: docId });
+      let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
+
+      return {
+        docid: docId,
+        name: docinfo.name,
+        snippet: snippet
+      };
+    }));
+
+    res.json(output);
   } else res.json({ error: true, message: '[SEARCH] Session not found.' });
 });
 
-app.get('/index/suggest', function (req, res) {
+app.get('/index/suggest', async function (req, res) {
   if (req.session.name) {
-    
+    let phrase = req.query.q;
+    if (phrase == null) 
+      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+
+    let results = await esClient.search({
+      _source: false,
+      suggest: {
+        suggestion: {
+          prefix: phrase,
+          completion: {
+            field: 'suggest',
+            fuzzy: {
+              fuzziness: 2
+            }
+          }
+        }
+      },
+      _source: false
+    });
+
+    results = results.suggest.suggestion[0].options;
+
+    let output = results.map((r) => {
+      return r.text;
+    });
+
+    res.json(output);
   } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });
 
-app.post('/elastic', function (req, res) {
+app.post('/index/refresh', function (req, res) {
+  let docIds = req.body.docIds;
+  docIds.forEach((docId) => {
+    let doc = connection.get('docs', docId);
+    doc.fetch(async (err) => {
+      if (err) throw err;
+      else if (doc.type == null)
+        return res.json({ error: true, message: 'Document does not exist!' });
 
+      let docinfo = await DocInfo.findOne({ docId: docId });
+      let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+      let html = convert(converter.convert());
+      let words = html.split(/\s+/);
+      esClient.index({
+        index: 'docs',
+        id: docId,
+        body: {
+          docName: docinfo.name,
+          contents: html,
+          suggest: words
+        }
+      });
+
+      esClient.indices.refresh({ index: 'docs' });
+    });
+  });
 });

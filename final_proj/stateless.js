@@ -302,6 +302,7 @@ app.get('/index/search', async function (req, res) {
     results = results.hits.hits;
     let output = await Promise.all(results.map(async (r) => {
       let docId = r._id;
+      console.log(docId);
       let docinfo = await DocInfo.findOne({ docId: docId });
       let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
 

@@ -90,7 +90,6 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
         docVersions[docId] = doc.version;
 
       // Setup stream and provide initial document contents
-      res.writeHead(200, streamHeaders); 
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
 
       res.on('close', () => {

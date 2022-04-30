@@ -28,7 +28,7 @@ const esClient = new Client({
   cloud: { id: process.env.CLOUD_ID },
   auth: {
     username: 'elastic',
-    password: process.env.ELASTICPWD
+    password: process.env.ELASTIC_PWD
   }
 });
 // Create index if not exists
@@ -155,21 +155,21 @@ app.get('/index/suggest', async function (req, res) {
   } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });
 
-app.post('/index/refresh', function (req, res) {
+app.post('/index/refresh', async function (req, res) {
   let docIds = req.body.docIds;
-  let docinfos = await DocInfo.find({ _id: { $in: docIds }}).lean();
+  let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
   for (let i = 0; i < docIds.length; i++) {
     let doc = connection.get('docs', docIds[i]);
-    doc.fetch((err) => {
+    doc.fetch(async (err) => {
       if (err) throw err;
-      else if (doc.type == null) continue; // Not necessarily an error
+      else if (doc.type == null) return; // Not necessarily an error
 
       let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
       let html = convert(converter.convert()); // Convert converted HTML to text
       let words = html.split(/\s+/); // Delimit by "spacey" characters
       await esClient.index({
         index: 'docs',
-        id: docId,
+        id: docIds[i],
         body: {
           docName: docinfos[i].name,
           contents: html,

@@ -7,14 +7,6 @@
     {
       "name": "stateless",
       "script": "./stateless.js"
-    },
-    {
-      "name": "worker",
-      "script": "./worker.js"
-    },
-    {
-      "name": "worker2",
-      "script": "./worker2.js"
     }
   ]
 }

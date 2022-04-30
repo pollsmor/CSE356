@@ -1,0 +1,8 @@
+Install Node.js: 
+- https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
+$ npm install
+
+Setup NGINX:
+$ apt install nginx
+$ cp nginx.conf /etc/nginx/nginx.conf
+$ systemctl restart nginx

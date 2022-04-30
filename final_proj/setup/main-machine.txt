@@ -1,5 +1,6 @@
 Install Node.js: 
 - https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
+$ npm install
 
 Install MongoDB:
 - https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
@@ -19,21 +20,3 @@ Setup Elasticsearch:
 - cp elastic.options /etc/elasticsearch/jvm.options.d/elastic.options
 - Edit file /etc/elasticsearch/elasticsearch.yml to disable xpack.security.enrollment
 $ systemctl restart elasticsearch
-
-$ npm install -g nodemon
-$ npm install express
-$ npm install mongoose
-$ npm install express-session
-$ npm install connect-mongodb-session
-$ npm install ejs
-$ npm install sharedb
-$ npm install sharedb-mongo
-$ npm install rich-text
-$ npm install nodemailer
-$ npm install quill-delta-to-html
-$ npm install express-fileupload
-$ npm install path
-$ npm install fs
-$ npm install @elastic/elasticsearch
-$ npm install http-proxy
-$ npm install axios

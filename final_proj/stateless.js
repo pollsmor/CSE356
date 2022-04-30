@@ -40,26 +40,13 @@ const esClient = new Client({ node: 'http://localhost:9200' });
 esClient.indices.create({
   index: 'docs',
   body: { 
-    settings: {
-      analysis: {
-        analyzer: {
-          my_analyzer: {
-            tokenizer: 'standard',
-            char_filter: ['html_strip'],
-            filter: ['lowercase', 'porter_stem', 'stop']
-          }
-        }
-      },
-    },
     mappings: {
       properties: {
         contents: {
           type: 'text',
-          analyzer: 'my_analyzer'
         },
         suggest: {
           type: 'completion',
-          analyzer: 'my_analyzer'
         }
       }
     }
@@ -67,6 +54,7 @@ esClient.indices.create({
 }).catch(err => {
   console.log('Index already exists.');
 });
+const searchCache = new Map();
 
 // Middleware
 app.set('view engine', 'ejs');
@@ -85,8 +73,8 @@ const serverIp = '209.94.58.105'; // Easier to just hardcode this
 const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
-server.keepAliveTimeout = 10 * 1000;
-server.headersTimeout = 10 * 1000;
+server.keepAliveTimeout = 60 * 1000;
+server.headersTimeout = 60 * 1000;
 
 function randomStr() {
   return Math.random().toString(36).slice(2);
@@ -273,22 +261,17 @@ app.get('/index/search', async function (req, res) {
     if (phrase == null) 
       return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
+    // Reuse cached results
+    if (searchCache.has(phrase))
+      return res.json(searchCache.get(phrase));
+
     let results = await esClient.search({
       index: 'docs',
       query: {
-        bool: {
-          should: [
-            { 
-              match_phrase: { 
-                contents: phrase
-              }
-            },
-            { 
-              match_phrase: {
-                 docName: phrase 
-              }
-            }
-          ]
+        multi_match: { 
+          query: phrase,
+          fuzziness: 2,
+          fields: ['contents', 'docName']
         }
       },
       fields: ['docName', 'contents'],
@@ -297,8 +280,9 @@ app.get('/index/search', async function (req, res) {
         fields: { 
           contents: {},
         },
-        fragment_size: 300,
-        order: 'score'       
+        fragment_size: 150,
+        order: 'score',
+        max_analyzed_offset: 999999       
       },
       size: 10
     });
@@ -316,6 +300,7 @@ app.get('/index/search', async function (req, res) {
       };
     }));
 
+    searchCache.set(phrase, output);
     res.json(output);
   } else res.json({ error: true, message: '[SEARCH] Session not found.' });
 });
@@ -333,9 +318,7 @@ app.get('/index/suggest', async function (req, res) {
           prefix: phrase,
           completion: {
             field: 'suggest',
-            fuzzy: {
-              fuzziness: 2
-            }
+            skip_duplicates: true
           }
         }
       },
@@ -365,7 +348,7 @@ app.post('/index/refresh', function (req, res) {
       let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
       let html = convert(converter.convert());
       let words = html.split(/\s+/);
-      esClient.index({
+      await esClient.index({
         index: 'docs',
         id: docId,
         body: {
@@ -374,8 +357,6 @@ app.post('/index/refresh', function (req, res) {
           suggest: words
         }
       });
-
-      esClient.indices.refresh({ index: 'docs' });
     });
   });
 });

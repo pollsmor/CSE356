@@ -1,4 +1,5 @@
-const mongoUri = 'mongodb://localhost:27017/final';
+require('dotenv').config()
+const mongoUri = `mongodb://${process.env.MAIN_MACHINE}:27017/final`;
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -46,8 +47,8 @@ const streamHeaders = {
 const server = app.listen(3002, () => {
   console.log('Proxy is now running.');
 });
-server.keepAliveTimeout = 10 * 1000;
-server.headersTimeout = 10 * 1000;
+server.keepAliveTimeout = 60 * 1000;
+server.headersTimeout = 60 * 1000;
 
 // Routes ====================================================================
 app.get('/doc/edit/:docid', async function (req, res) {
@@ -189,10 +190,10 @@ app.post('/doc/presence/:docid/:uid', async function(req, res) {
 // Index into Elasticsearch from time to time
 setInterval(() => {
   if (Object.keys(docVersions).length > 0) {
-    axios.post('http://localhost:3000/index/refresh', {
+    axios.post(`http://${process.env.MAIN_MACHINE}:3000/index/refresh`, {
       docIds: Object.keys(docVersions)
     }).catch(err => {
       console.log(err);
     });
   }
-}, 5000);
+}, 3000);

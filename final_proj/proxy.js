@@ -1,8 +1,4 @@
-const mongoUri = 'mongodb://localhost:27017/final';
 const express = require('express');
-const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
-const cors = require('cors');
 require('dotenv').config();
 
 /*
@@ -28,24 +24,13 @@ const streamHeaders = {
 const machineAssignedToDocs = {};
 let machineIpIdx = 0;
 
-// Session handling
-const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
-
 // Middleware
 app.set('view engine', 'ejs');
-app.use(cors());
 app.use(express.static('public'));
-app.use(session({
-  secret: 'secret',
-  store: store,
-  resave: false,
-  saveUninitialized: false
-}));
 app.use(function(req, res, next) {
   res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
   next(); // Set ID header for every route
 });
-
 
 const server = app.listen(proxyPort, () => {
   console.log(`Google Docs Clone is now running on port ${proxyPort}.`);
@@ -63,8 +48,7 @@ app.use('/doc/edit/:docid', function (req, res, next) {
     }
 
     proxy.web(req, res, {
-      // This is technically stateless.
-      target: `http://localhost:${statelessPort}/doc/edit/${docId}`
+      target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
     }, next);
   } else res.json({ error: true, message: 'Session not found.' });
 });

@@ -337,7 +337,7 @@ app.get('/index/suggest', async function (req, res) {
 
 app.post('/index/refresh', function (req, res) {
   let docIds = req.body.docIds;
-  docIds.forEach((docId) => {
+  for (let docId of docIds) {
     let doc = connection.get('docs', docId);
     doc.fetch(async (err) => {
       if (err) throw err;
@@ -358,5 +358,7 @@ app.post('/index/refresh', function (req, res) {
         }
       });
     });
-  });
+  }
+
+  res.json({ status: 'success '});
 });

@@ -42,12 +42,12 @@ server.headersTimeout = 60 * 1000;
 app.use('/doc/edit/:docid', function (req, res, next) {
   let docId = req.params.docid;
   if (!(docId in machineAssignedToDocs)) {
-    machineAssignedToDocs[docId] = machineIps[machineIpIdx]++;
+    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
     if (machineIpIdx == machineIps.length) machineIpIdx = 0;
   }
 
   proxy.web(req, res, {
-    target: `http://localhost:${machineAssignedToDocs[docId]}/doc/edit/${docId}`
+    target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
   }, next);
 });
 
@@ -55,35 +55,34 @@ app.use('/doc/edit/:docid', function (req, res, next) {
 app.use('/doc/connect/:docid/:uid', function (req, res, next) {
   let docId = req.params.docid;
   if (!(docId in machineAssignedToDocs)) {
-    machineAssignedToDocs[docId] = machineIps[machineIpIdx]++;
+    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
     if (machineIpIdx == machineIps.length) machineIpIdx = 0;
   }
 
   res.writeHead(200, streamHeaders);
-  let chosenPort = coreAssignedToDocs[docId];
   proxy.web(req, res, {
-    target: `http://localhost:${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
+    target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
   }, next);
 });
 
 app.use('/doc/op/:docid/:uid', function (req, res, next) {
   let docId = req.params.docid;
   proxy.web(req, res, {
-    target: `http://localhost:${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
+    target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
   }, next);
 });
 
 app.use('/doc/get/:docid/:uid', function (req, res, next) {
   let docId = req.params.docid;
   proxy.web(req, res, {
-    target: `http://localhost:${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
+    target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
   }, next);
 });
 
 app.use('/doc/presence/:docid/:uid', function (req, res, next) {
   let docId = req.params.docid;
   proxy.web(req, res, {
-    target: `http://localhost:${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
+    target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
   }, next);
 });
 

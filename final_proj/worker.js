@@ -44,7 +44,7 @@ const streamHeaders = {
   'X-Accel-Buffering': 'no'
 };
 
-const server = app.listen(3002, () => {
+const server = app.listen(3000, () => {
   console.log('Proxy is now running.');
 });
 server.keepAliveTimeout = 60 * 1000;
@@ -139,6 +139,7 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
               otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
           });
 
+          console.log('lmao');
           res.json({ status: 'ok' });
         });
       } else if (version < docVersions[docId]) {
@@ -190,7 +191,7 @@ app.post('/doc/presence/:docid/:uid', async function(req, res) {
 // Index into Elasticsearch from time to time
 setInterval(() => {
   if (Object.keys(docVersions).length > 0) {
-    axios.post(`http://${process.env.MAIN_MACHINE}:3000/index/refresh`, {
+    axios.post(`http://${process.env.MAIN_MACHINE}/index/refresh`, {
       docIds: Object.keys(docVersions)
     }).catch(err => {
       console.log(err);

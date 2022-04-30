@@ -1,21 +1,17 @@
 require('dotenv').config()
 const mongoUri = `mongodb://${process.env.MAIN_MACHINE}:27017/final`;
-
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
 const axios = require('axios');
 
 // Mongoose models
-const DocInfo = require('./models/docinfo'); // For now, only to store doc name
+const DocInfo = require('./models/docinfo'); 
 
 // Session handling
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
-const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
 // Setup ShareDB
 const app = express();
@@ -27,12 +23,6 @@ const connection = backend.connect();
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
-app.use(session({
-  secret: 'secret',
-  store: store,
-  resave: false,
-  saveUninitialized: false
-}));
 
 // Constants
 const docVersions = {};
@@ -51,23 +41,6 @@ server.keepAliveTimeout = 60 * 1000;
 server.headersTimeout = 60 * 1000;
 
 // Routes ====================================================================
-app.get('/doc/edit/:docid', async function (req, res) {
-  let docId = req.params.docid;
-
-  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
-  let docinfo = await DocInfo.findOne({ docId: docId });
-  if (docinfo == null) { // Document does not exist
-    res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
-  } else {
-    res.render('doc', {
-      name: req.session.name,
-      email: req.session.email,
-      docName: docinfo.name,
-      docId: docId
-    });
-  }
-});
-
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', async function (req, res) {
   let docId = req.params.docid;

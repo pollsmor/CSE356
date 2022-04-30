@@ -362,3 +362,21 @@ app.post('/index/refresh', function (req, res) {
 
   res.json({ status: 'success '});
 });
+
+// I need this here for the session handling.
+app.get('/doc/edit/:docid', async function (req, res) {
+  let docId = req.params.docid;
+
+  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
+  let docinfo = await DocInfo.findOne({ docId: docId });
+  if (docinfo == null) { // Document does not exist
+    res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
+  } else {
+    res.render('doc', {
+      name: req.session.name,
+      email: req.session.email,
+      docName: docinfo.name,
+      docId: docId
+    });
+  }
+});

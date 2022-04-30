@@ -4,7 +4,7 @@ const uid = 's' + Math.random().toString(36).slice(2);
 const docId = document.getElementById('docid').innerText;
 const queue = [];
 let docVersion;
-const mainMachineIp = '209.94.58.105';
+const mainMachineIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {

@@ -40,60 +40,50 @@ server.headersTimeout = 60 * 1000;
 
 // Proxy requests =========================================================
 app.use('/doc/edit/:docid', function (req, res, next) {
-  if (req.session.name) {
-    let docId = req.params.docid;
-    if (!(docId in machineAssignedToDocs)) {
-      machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
-      if (machineIpIdx == machineIps.length) machineIpIdx = 0;
-    }
+  let docId = req.params.docid;
+  if (!(docId in machineAssignedToDocs)) {
+    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
+    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
+  }
 
-    proxy.web(req, res, {
-      target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
-    }, next);
-  } else res.json({ error: true, message: 'Session not found.' });
+  proxy.web(req, res, {
+    target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
+  }, next);
 });
 
 // Distribute load based on document ID
 app.use('/doc/connect/:docid/:uid', function (req, res, next) {
-  if (req.session.name) {
-    let docId = req.params.docid;
-    if (!(docId in machineAssignedToDocs)) {
-      machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
-      if (machineIpIdx == machineIps.length) machineIpIdx = 0;
-    }
+  let docId = req.params.docid;
+  if (!(docId in machineAssignedToDocs)) {
+    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
+    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
+  }
 
-    res.writeHead(200, streamHeaders);
-    proxy.web(req, res, {
-      target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
-    }, next);
-  } else res.json({ error: true, message: 'Session not found.' });
+  res.writeHead(200, streamHeaders);
+  proxy.web(req, res, {
+    target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
+  }, next);
 });
 
 app.use('/doc/op/:docid/:uid', function (req, res, next) {
-  if (req.session.name) {
-    let docId = req.params.docid;
-    proxy.web(req, res, {
-      target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
-    }, next);
-  } else res.json({ error: true, message: 'Session not found.' });
+  let docId = req.params.docid;
+  proxy.web(req, res, {
+    target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
+  }, next);
 });
 
 app.use('/doc/get/:docid/:uid', function (req, res, next) {
-  if (req.session.name) {
-    let docId = req.params.docid;
-    proxy.web(req, res, {
-      target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
-    }, next);
-  } else res.json({ error: true, message: 'Session not found.' });
+  let docId = req.params.docid;
+  proxy.web(req, res, {
+    target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
+  }, next);
 });
 
 app.use('/doc/presence/:docid/:uid', function (req, res, next) {
-  if (req.session.name) {
     let docId = req.params.docid;
     proxy.web(req, res, {
       target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
     }, next);
-  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Stateless microservices

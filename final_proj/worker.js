@@ -66,7 +66,7 @@ app.get('/doc/edit/:docid', async function (req, res) {
         docId: docId
       });
     }
-  } res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Setup Delta event stream
@@ -108,7 +108,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
         });
       });
     });
-  } res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Submit Delta op to ShareDB and to other users
@@ -138,7 +138,6 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
               otherRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
           });
   
-          console.log('lmao');
           res.json({ status: 'ok' });
         });
       } else if (version < docVersions[docId]) {
@@ -147,7 +146,7 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
         res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
       }
     });
-  } res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Get HTML of current document
@@ -164,7 +163,7 @@ app.get('/doc/get/:docid/:uid', async function (req, res) {
       res.set('Content-Type', 'text/html');
       res.send(Buffer.from(html));
     });
-  } res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Presence
@@ -186,7 +185,7 @@ app.post('/doc/presence/:docid/:uid', async function(req, res) {
     });
   
     res.json({});
-  } res.json({ error: true, message: 'Session not found.' });
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Index into Elasticsearch from time to time

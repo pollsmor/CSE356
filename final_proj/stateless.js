@@ -44,9 +44,11 @@ esClient.indices.create({
       properties: {
         contents: {
           type: 'text',
+          analyzer: 'standard'
         },
         suggest: {
           type: 'completion',
+          analyzer: 'standard'
         }
       }
     }
@@ -55,6 +57,7 @@ esClient.indices.create({
   console.log('Index already exists.');
 });
 const searchCache = new Map();
+const suggestCache = new Map();
 
 // Middleware
 app.set('view engine', 'ejs');
@@ -270,7 +273,7 @@ app.get('/index/search', async function (req, res) {
       query: {
         multi_match: { 
           query: phrase,
-          fuzziness: 2,
+          type: 'phrase_prefix',
           fields: ['contents', 'docName']
         }
       },
@@ -280,7 +283,7 @@ app.get('/index/search', async function (req, res) {
         fields: { 
           contents: {},
         },
-        fragment_size: 150,
+        fragment_size: 400,
         order: 'score',
         max_analyzed_offset: 999999       
       },
@@ -311,6 +314,10 @@ app.get('/index/suggest', async function (req, res) {
     if (phrase == null) 
       return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
+    // Reuse cached results
+    if (suggestCache.has(phrase))
+      return res.json(suggestCache.get(phrase));
+
     let results = await esClient.search({
       _source: false,
       suggest: {
@@ -331,6 +338,7 @@ app.get('/index/suggest', async function (req, res) {
       return r.text;
     });
 
+    suggestCache.set(phrase, output);
     res.json(output);
   } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });

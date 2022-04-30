@@ -106,6 +106,11 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
         users_of_doc.forEach((otherRes, otherUid) => {
           otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
         });
+
+        if (users_of_doc.size === 0) {
+          users_of_docs.delete(docId);
+          delete docVersions.docId
+        }
       });
     });
   } else res.json({ error: true, message: 'Session not found.' });

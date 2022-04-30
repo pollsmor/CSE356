@@ -4,7 +4,7 @@ const uid = 's' + Math.random().toString(36).slice(2);
 const docId = document.getElementById('docid').innerText;
 const queue = [];
 let docVersion;
-const mainMachineIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';
+const mainMachineIp = 'http://teamsolokid.cse356.compas.cs.stonybrook.edu';
 
 // Initialize Quill editor
 const quill = new Quill('#editor', {
@@ -40,6 +40,7 @@ quill.on('selection-change', (range, oldRange, source) => {
   }
 });
 
+console.log(`http://${mainMachineIp}/doc/connect/${docId}/${uid}`);
 const stream = new EventSource(`http://${mainMachineIp}/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
   message = JSON.parse(message.data);

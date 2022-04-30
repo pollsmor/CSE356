@@ -42,6 +42,7 @@ esClient.indices.create({
         },
         suggest: {
           type: 'completion',
+          analyzer: 'standard'
         }
       }
     }

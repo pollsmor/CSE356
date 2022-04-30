@@ -36,18 +36,12 @@ app.use(session({
 // Constants
 const docVersions = {};
 const users_of_docs = new Map();
-const streamHeaders = {
-  'Content-Type': 'text/event-stream',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'X-Accel-Buffering': 'no'
-};
 
 const server = app.listen(3000, () => {
   console.log('Proxy is now running.');
 });
-server.keepAliveTimeout = 60 * 1000;
-server.headersTimeout = 60 * 1000;
+server.keepAliveTimeout = 3600 * 1000;
+server.headersTimeout = 3600 * 1000;
 
 // Routes ====================================================================
 app.get('/doc/edit/:docid', async function (req, res) {
@@ -109,7 +103,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 
         if (users_of_doc.size === 0) {
           users_of_docs.delete(docId);
-          delete docVersions.docId
+          delete docVersions.docId;
         }
       });
     });
@@ -202,4 +196,4 @@ setInterval(() => {
       console.log(err);
     });
   }
-}, 3000);
+}, 7500);

@@ -65,7 +65,7 @@ app.use('/doc/connect/:docid/:uid', function (req, res, next) {
   }, next);
 });
 
-app.use('/doc/op/:docid/:uid', function (req, res, next) {
+app.use('/doc', function (req, res, next) {
   let docId = req.params.docid;
   proxy.web(req, res, {
     target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
@@ -84,11 +84,4 @@ app.use('/doc/presence/:docid/:uid', function (req, res, next) {
     proxy.web(req, res, {
       target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
     }, next);
-});
-
-// Stateless microservices
-app.use('/', function (req, res, next) {
-  proxy.web(req, res, {
-    target: `http://localhost:${statelessPort}`
-  }, next);
 });

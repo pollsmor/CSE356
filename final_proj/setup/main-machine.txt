@@ -7,7 +7,7 @@ Install MongoDB:
 
 Setup NGINX:
 $ apt install nginx
-$ cp nginx.conf /etc/nginx/nginx.conf
+$ cp setup/proxy.conf /etc/nginx/nginx.conf
 $ systemctl restart nginx
 
 Setup Postfix:

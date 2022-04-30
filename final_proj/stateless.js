@@ -1,22 +1,18 @@
 const mongoUri = 'mongodb://localhost:27017/final';
-
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
-const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
 const nodemailer = require('nodemailer');
 const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
-const { Client } = require('@elastic/elasticsearch');
-const { convert } = require('html-to-text');
 
 // Mongoose models
 const User = require('./models/user');
-const DocInfo = require('./models/docinfo'); // For now, only to store doc name
+const DocInfo = require('./models/docinfo');
 
 // Session handling
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
@@ -35,30 +31,6 @@ const transport = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 });
 
-// Create Elasticsearch index if not exists
-const esClient = new Client({ node: 'http://localhost:9200' });
-esClient.indices.create({
-  index: 'docs',
-  body: { 
-    mappings: {
-      properties: {
-        contents: {
-          type: 'text',
-          analyzer: 'standard'
-        },
-        suggest: {
-          type: 'completion',
-          analyzer: 'standard'
-        }
-      }
-    }
-  }
-}).catch(err => {
-  console.log('Index already exists.');
-});
-const searchCache = new Map();
-const suggestCache = new Map();
-
 // Middleware
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
@@ -72,7 +44,7 @@ app.use(session({
   saveUninitialized: false,
 }));
 
-const serverIp = '209.94.58.105'; // Easier to just hardcode this
+const serverIp = 'http://teamsolokid.cse356.compas.cs.stonybrook.edu';
 const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
@@ -106,7 +78,7 @@ app.get('/home', function (req, res) {
 // User routes
 app.post('/users/login', async function (req, res) {
   // Try to log in with provided credentials
-  let user = await User.findOne({ email: req.body.email });
+  let user = await User.findOne({ email: req.body.email }).lean();
   if (!user || !user.verified || req.body.password !== user.password) {
     res.json({ error: true, message: '[LOGIN] Incorrect credentials or unverified.' });
   } else { // Establish session
@@ -254,119 +226,4 @@ app.get('/media/access/:mediaid', async function (req, res) {
       res.sendFile(filePath);
     } else res.json({ error: true, message: '[ACCESS MEDIA] File does not exist. ' });
   } else res.json({ error: true, message: '[VIEW MEDIA] Session not found.' });
-});
-
-// =====================================================================
-// Milestone 3: Search/Suggest
-app.get('/index/search', async function (req, res) {
-  if (req.session.name) {
-    let phrase = req.query.q;
-    if (phrase == null) 
-      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
-
-    // Reuse cached results
-    if (searchCache.has(phrase))
-      return res.json(searchCache.get(phrase));
-
-    let results = await esClient.search({
-      index: 'docs',
-      query: {
-        multi_match: { 
-          query: phrase,
-          type: 'phrase_prefix',
-          fields: ['contents', 'docName']
-        }
-      },
-      fields: ['docName', 'contents'],
-      _source: false,
-      highlight: {
-        fields: { 
-          contents: {},
-        },
-        fragment_size: 400,
-        order: 'score',
-        max_analyzed_offset: 999999       
-      },
-      size: 10
-    });
-
-    results = results.hits.hits;
-    let output = await Promise.all(results.map(async (r) => {
-      let docId = r._id;
-      let docinfo = await DocInfo.findOne({ docId: docId });
-      let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
-
-      return {
-        docid: docId,
-        name: docinfo.name,
-        snippet: snippet
-      };
-    }));
-
-    searchCache.set(phrase, output);
-    res.json(output);
-  } else res.json({ error: true, message: '[SEARCH] Session not found.' });
-});
-
-app.get('/index/suggest', async function (req, res) {
-  if (req.session.name) {
-    let phrase = req.query.q;
-    if (phrase == null) 
-      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
-
-    // Reuse cached results
-    if (suggestCache.has(phrase))
-      return res.json(suggestCache.get(phrase));
-
-    let results = await esClient.search({
-      _source: false,
-      suggest: {
-        suggestion: {
-          prefix: phrase,
-          completion: {
-            field: 'suggest',
-            skip_duplicates: true
-          }
-        }
-      },
-      _source: false
-    });
-
-    results = results.suggest.suggestion[0].options;
-
-    let output = results.map((r) => {
-      return r.text;
-    });
-
-    suggestCache.set(phrase, output);
-    res.json(output);
-  } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
-});
-
-app.post('/index/refresh', function (req, res) {
-  let docIds = req.body.docIds;
-  for (let docId of docIds) {
-    let doc = connection.get('docs', docId);
-    doc.fetch(async (err) => {
-      if (err) throw err;
-      else if (doc.type == null)
-        return res.json({ error: true, message: 'Document does not exist!' });
-
-      let docinfo = await DocInfo.findOne({ docId: docId });
-      let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-      let html = convert(converter.convert());
-      let words = html.split(/\s+/);
-      await esClient.index({
-        index: 'docs',
-        id: docId,
-        body: {
-          docName: docinfo.name,
-          contents: html,
-          suggest: words
-        }
-      });
-    });
-  }
-
-  res.json({ status: 'success '});
 });

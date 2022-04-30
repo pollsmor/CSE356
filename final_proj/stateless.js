@@ -82,9 +82,11 @@ app.use(session({
 }));
 
 const serverIp = '209.94.58.105'; // Easier to just hardcode this
-app.listen(3001, () => {
+const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
+server.keepAliveTimeout = 10 * 1000;
+server.headersTimeout = 10 * 1000;
 
 function randomStr() {
   return Math.random().toString(36).slice(2);
@@ -277,12 +279,12 @@ app.get('/index/search', async function (req, res) {
         bool: {
           should: [
             { 
-              match: { 
+              match_phrase: { 
                 contents: phrase
               }
             },
             { 
-              match: {
+              match_phrase: {
                  docName: phrase 
               }
             }
@@ -293,8 +295,10 @@ app.get('/index/search', async function (req, res) {
       _source: false,
       highlight: {
         fields: { 
-          contents: {}
-        }
+          contents: {},
+        },
+        fragment_size: 300,
+        order: 'score'       
       },
       size: 10
     });
@@ -302,7 +306,6 @@ app.get('/index/search', async function (req, res) {
     results = results.hits.hits;
     let output = await Promise.all(results.map(async (r) => {
       let docId = r._id;
-      console.log(docId);
       let docinfo = await DocInfo.findOne({ docId: docId });
       let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
 

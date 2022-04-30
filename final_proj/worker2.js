@@ -43,7 +43,7 @@ const streamHeaders = {
   'X-Accel-Buffering': 'no'
 };
 
-const server = app.listen(3002, () => {
+const server = app.listen(3003, () => {
   console.log('Proxy is now running.');
 });
 server.keepAliveTimeout = 10 * 1000;

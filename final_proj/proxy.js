@@ -1,4 +1,8 @@
+const mongoUri = 'mongodb://localhost:27017/final';
 const express = require('express');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
+const cors = require('cors');
 require('dotenv').config();
 
 /*
@@ -24,8 +28,12 @@ const streamHeaders = {
 const machineAssignedToDocs = {};
 let machineIpIdx = 0;
 
+// Session handling
+const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
+
 // Middleware
 app.set('view engine', 'ejs');
+app.use(cors());
 app.use(express.static('public'));
 app.use(function(req, res, next) {
   res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
@@ -40,50 +48,60 @@ server.headersTimeout = 60 * 1000;
 
 // Proxy requests =========================================================
 app.use('/doc/edit/:docid', function (req, res, next) {
-  let docId = req.params.docid;
-  if (!(docId in machineAssignedToDocs)) {
-    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
-    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
-  }
+  if (req.session.name) {
+    let docId = req.params.docid;
+    if (!(docId in machineAssignedToDocs)) {
+      machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
+      if (machineIpIdx == machineIps.length) machineIpIdx = 0;
+    }
 
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
-  }, next);
+    proxy.web(req, res, {
+      target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
+    }, next);
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Distribute load based on document ID
 app.use('/doc/connect/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  if (!(docId in machineAssignedToDocs)) {
-    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
-    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
-  }
+  if (req.session.name) {
+    let docId = req.params.docid;
+    if (!(docId in machineAssignedToDocs)) {
+      machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
+      if (machineIpIdx == machineIps.length) machineIpIdx = 0;
+    }
 
-  res.writeHead(200, streamHeaders);
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
-  }, next);
+    res.writeHead(200, streamHeaders);
+    proxy.web(req, res, {
+      target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
+    }, next);
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 app.use('/doc/op/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
-  }, next);
+  if (req.session.name) {
+    let docId = req.params.docid;
+    proxy.web(req, res, {
+      target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
+    }, next);
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 app.use('/doc/get/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
-  }, next);
+  if (req.session.name) {
+    let docId = req.params.docid;
+    proxy.web(req, res, {
+      target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
+    }, next);
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 app.use('/doc/presence/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
-  }, next);
+  if (req.session.name) {
+    let docId = req.params.docid;
+    proxy.web(req, res, {
+      target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
+    }, next);
+  } else res.json({ error: true, message: 'Session not found.' });
 });
 
 // Stateless microservices

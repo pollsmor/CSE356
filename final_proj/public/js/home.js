@@ -1,7 +1,7 @@
 let docs = document.getElementById('docs');
 let uid = document.getElementById('email').innerText;
 
-axios.get(`http://${mainMachineIp}/collection/list`)
+axios.get('/collection/list')
   .then((res) => {
     for (let doc of res.data) {
       let docId = doc.id;
@@ -26,7 +26,7 @@ axios.get(`http://${mainMachineIp}/collection/list`)
 
 // Need JS to POST data without a form
 function deleteDoc(docId) {
-  axios.post(`http://${mainMachineIp}/collection/delete`, {
+  axios.post('/collection/delete', {
     docid: docId
   }).then((res) => {
     document.getElementById(docId).remove();

@@ -13,12 +13,6 @@ const proxy = require('http-proxy').createProxyServer({
   host: process.env.MAIN_MACHINE,
   port: proxyPort
 });
-const streamHeaders = {
-  'Content-Type': 'text/event-stream',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'X-Accel-Buffering': 'no'
-};
 
 // Assign new documents to machines equally
 const machineAssignedToDocs = {};
@@ -59,7 +53,6 @@ app.use('/doc/connect/:docid/:uid', function (req, res, next) {
     if (machineIpIdx == machineIps.length) machineIpIdx = 0;
   }
 
-  res.writeHead(200, streamHeaders);
   proxy.web(req, res, {
     target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
   }, next);
@@ -74,6 +67,11 @@ app.use('/doc/op/:docid/:uid', function (req, res, next) {
 
 app.use('/doc/get/:docid/:uid', function (req, res, next) {
   let docId = req.params.docid;
+  if (!(docId in machineAssignedToDocs)) {
+    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
+    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
+  }
+
   proxy.web(req, res, {
     target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
   }, next);

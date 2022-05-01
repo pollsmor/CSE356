@@ -40,8 +40,8 @@ const users_of_docs = new Map();
 const server = app.listen(3000, () => {
   console.log('Proxy is now running.');
 });
-server.keepAliveTimeout = 3600 * 1000;
-server.headersTimeout = 3600 * 1000;
+server.keepAliveTimeout = 60 * 1000;
+server.headersTimeout = 60 * 1000;
 
 // Routes ====================================================================
 app.get('/doc/edit/:docid', async function (req, res) {

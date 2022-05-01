@@ -1,5 +1,5 @@
 require('dotenv').config()
-const mongoUri = `mongodb://${process.env.MAIN_MACHINE}:27017/final`;
+const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');

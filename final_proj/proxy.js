@@ -1,5 +1,5 @@
-const express = require('express');
 require('dotenv').config();
+const express = require('express');
 
 /*
 Port 3000: This proxy server
@@ -8,7 +8,6 @@ Port 3001: Contains stateless services (i.e. login)
 const app = express();
 const machineIps = process.env.WORKER_MACHINES.split(' ');
 const proxyPort = 3000;
-const statelessPort = 3001;
 const proxy = require('http-proxy').createProxyServer({ 
   host: process.env.MAIN_MACHINE,
   port: proxyPort
@@ -18,19 +17,11 @@ const proxy = require('http-proxy').createProxyServer({
 const machineAssignedToDocs = {};
 let machineIpIdx = 0;
 
-// Middleware
-app.set('view engine', 'ejs');
-app.use(express.static('public'));
-app.use(function(req, res, next) {
-  res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
-  next(); // Set ID header for every route
-});
-
 const server = app.listen(proxyPort, () => {
   console.log(`Google Docs Clone is now running on port ${proxyPort}.`);
 });
-server.keepAliveTimeout = 60 * 1000;
-server.headersTimeout = 60 * 1000;
+server.keepAliveTimeout = 61 * 1000;
+server.headersTimeout = 62 * 1000;
 
 // Proxy requests =========================================================
 app.use('/doc/edit/:docid', function (req, res, next) {

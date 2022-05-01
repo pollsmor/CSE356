@@ -1,4 +1,5 @@
-const mongoUri = 'mongodb://localhost:27017/final';
+require('dotenv').config();
+const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
@@ -43,13 +44,17 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
 }));
+app.use(function(req, res, next) {
+  res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
+  next(); // Set ID header for every route
+});
 
 const serverIp = 'http://teamsolokid.cse356.compas.cs.stonybrook.edu';
 const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
-server.keepAliveTimeout = 60 * 1000;
-server.headersTimeout = 60 * 1000;
+server.keepAliveTimeout = 61 * 1000;
+server.headersTimeout = 62 * 1000;
 
 function randomStr() {
   return Math.random().toString(36).slice(2);

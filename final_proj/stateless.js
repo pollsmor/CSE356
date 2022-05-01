@@ -53,8 +53,6 @@ const serverIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';
 const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
-server.keepAliveTimeout = 61 * 1000;
-server.headersTimeout = 62 * 1000;
 
 function randomStr() {
   return Math.random().toString(36).slice(2);

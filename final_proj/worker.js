@@ -46,8 +46,6 @@ const streamHeaders = {
 const server = app.listen(80, () => {
   console.log('Proxy is now running.');
 });
-server.keepAliveTimeout = 61 * 1000;
-server.headersTimeout = 62 * 1000;
 
 // Routes ====================================================================
 app.get('/doc/edit/:docid', async function (req, res) {

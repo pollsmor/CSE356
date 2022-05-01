@@ -70,9 +70,6 @@ app.use(function(req, res, next) {
 const server = app.listen(3002, () => {
   console.log('Index service running on port 3002.');
 });
-server.keepAliveTimeout = 61 * 1000;
-server.headersTimeout = 62 * 1000;
-
 
 // Milestone 3: Search/Suggest
 app.get('/index/search', async function (req, res) {

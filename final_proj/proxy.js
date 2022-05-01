@@ -20,8 +20,6 @@ let machineIpIdx = 0;
 const server = app.listen(proxyPort, () => {
   console.log(`Google Docs Clone is now running on port ${proxyPort}.`);
 });
-server.keepAliveTimeout = 61 * 1000;
-server.headersTimeout = 62 * 1000;
 
 // Proxy requests =========================================================
 app.use('/doc/edit/:docid', function (req, res, next) {

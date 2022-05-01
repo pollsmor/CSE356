@@ -5,22 +5,23 @@ $ nano /etc/mongod.conf
 
 ===========================================================================
 
-Install Node.js: 
-- https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
-$ npm install
-
 Setup NGINX:
 $ apt install nginx
 $ cp setup/proxy.conf /etc/nginx/nginx.conf
 $ systemctl restart nginx
 
+Install Node.js: 
+- https://www.digitalocean.com/community/tutorials/how-to-install-node-js-on-ubuntu-20-04
+$ npm install
+$ npm install -g nodemon
+$ npm install -g pm2
+
 Setup Postfix:
-- https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-postfix-on-ubuntu-20-04
 $ apt install mailutils
 
-Setup Elasticsearch:
+Setup Elasticsearch (once Elastic Cloud expires):
 - https://www.elastic.co/guide/en/elasticsearch/reference/8.1/deb.html
   - Also setup Kibana for visualization, but not needed.
-- cp elastic.options /etc/elasticsearch/jvm.options.d/elastic.options
+- cp setup/elastic.options /etc/elasticsearch/jvm.options.d/elastic.options
 - Edit file /etc/elasticsearch/elasticsearch.yml to disable xpack.security.enrollment
 $ systemctl restart elasticsearch

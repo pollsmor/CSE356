@@ -36,6 +36,12 @@ app.use(session({
 // Constants
 const docVersions = {};
 const users_of_docs = new Map();
+const streamHeaders = {
+  'Content-Type': 'text/event-stream',
+  'Connection': 'keep-alive',
+  'Cache-Control': 'no-cache',
+  'X-Accel-Buffering': 'no'
+};
 
 const server = app.listen(3000, () => {
   console.log('Proxy is now running.');
@@ -91,6 +97,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 
       // Setup stream and provide initial document contents
       res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+      res.writeHead(200, streamHeaders);
 
       res.on('close', () => {
         // Broadcast presence disconnection

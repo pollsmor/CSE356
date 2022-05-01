@@ -49,7 +49,7 @@ app.use(function(req, res, next) {
   next(); // Set ID header for every route
 });
 
-const serverIp = 'http://teamsolokid.cse356.compas.cs.stonybrook.edu';
+const serverIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';
 const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });

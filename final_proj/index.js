@@ -92,7 +92,8 @@ app.get('/index/search', async function (req, res) {
         },
         fragment_size: 400,
         order: 'score',
-        max_analyzed_offset: 999999       
+        max_analyzed_offset: 999999,
+        type: 'plain'   
       },
       size: 10
     });

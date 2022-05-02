@@ -94,10 +94,10 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 
     // Setup stream and provide initial document contents
     res.writeHead(200, streamHeaders);
-    res.write(`data: { "content": ${doc.data.ops}, "version": ${doc.version} }\n\n`);
+    res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
 
     let receiveOp = (op, source) => {
-      if (source !== uid) res.write(`data: ${op}\n\n`);
+      if (source !== uid) res.write(`data: ${JSON.stringify(op)}\n\n`);
     };
     doc.on('op', receiveOp);
 
@@ -134,7 +134,7 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
 
       let users_of_doc = users_of_docs.get(docId);
       let userRes = users_of_docs.get(docId).get(req.params.uid);
-      userRes.write(`data: { "ack": ${op} }\n\n`);
+      userRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
 
       res.json({ status: 'ok' });
     });
@@ -163,11 +163,11 @@ app.get('/doc/get/:docid/:uid', async function (req, res) {
 // Presence
 app.post('/doc/presence/:docid/:uid', async function(req, res) {
   let uid = req.params.uid;
-  let presenceData = {
+  let presenceData = JSON.stringify({
     index: req.body.index,
     length: req.body.length,
     name: uid // He doesn't even check for name :D
-  };
+  });
 
   // Broadcast presence to everyone else
   let users_of_doc = users_of_docs.get(req.params.docid);

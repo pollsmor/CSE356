@@ -71,84 +71,88 @@ const server = app.listen(3002, () => {
 
 // Milestone 3: Search/Suggest
 app.get('/index/search', async function (req, res) {
-  let phrase = req.query.q;
-  if (phrase == null) 
-    return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+  if (req.session.name) {
+    let phrase = req.query.q;
+    if (phrase == null) 
+      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
-  // Reuse cached results
-  if (searchCache.has(phrase))
-    return res.json(searchCache.get(phrase));
+    // Reuse cached results
+    if (searchCache.has(phrase))
+      return res.json(searchCache.get(phrase));
 
-  let results = await esClient.search({
-    index: 'docs',
-    query: {
-      multi_match: { 
-        query: phrase,
-        type: 'phrase_prefix',
-        fields: ['contents', 'docName']
-      }
-    },
-    fields: ['docName', 'contents'],
-    _source: false,
-    highlight: {
-      fields: { 
-        contents: {},
+    let results = await esClient.search({
+      index: 'docs',
+      query: {
+        multi_match: { 
+          query: phrase,
+          type: 'phrase_prefix',
+          fields: ['contents', 'docName']
+        }
       },
-      fragment_size: 400,
-      order: 'score',
-      max_analyzed_offset: 999999       
-    },
-    size: 10
-  });
+      fields: ['docName', 'contents'],
+      _source: false,
+      highlight: {
+        fields: { 
+          contents: {},
+        },
+        fragment_size: 400,
+        order: 'score',
+        max_analyzed_offset: 999999       
+      },
+      size: 10
+    });
 
-  results = results.hits.hits;
-  let output = await Promise.all(results.map(async (r) => {
-    let docId = r._id;
-    let docinfo = await DocInfo.findOne({ docId: docId });
-    let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
+    results = results.hits.hits;
+    let output = await Promise.all(results.map(async (r) => {
+      let docId = r._id;
+      let docinfo = await DocInfo.findOne({ docId: docId });
+      let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
 
-    return {
-      docid: docId,
-      name: docinfo.name,
-      snippet: snippet
-    };
-  }));
+      return {
+        docid: docId,
+        name: docinfo.name,
+        snippet: snippet
+      };
+    }));
 
-  searchCache.set(phrase, output);
-  res.json(output);
+    searchCache.set(phrase, output);
+    res.json(output);
+  } else res.json({ error: true, message: '[SEARCH] Session not found.' });
 });
 
 app.get('/index/suggest', async function (req, res) {
-  let phrase = req.query.q;
-  if (phrase == null) 
-    return res.json({ error: true, message: '[SEARCH] Empty query string.' });
-
-  // Reuse cached results
-  if (suggestCache.has(phrase))
-    return res.json(suggestCache.get(phrase));
-
-  let results = await esClient.search({
-    _source: false,
-    suggest: {
-      suggestion: {
-        prefix: phrase,
-        completion: {
-          field: 'suggest',
-          skip_duplicates: true
+  if (req.session.name) {
+    let phrase = req.query.q;
+    if (phrase == null) 
+      return res.json({ error: true, message: '[SUGGEST] Empty query string.' });
+  
+    // Reuse cached results
+    if (suggestCache.has(phrase))
+      return res.json(suggestCache.get(phrase));
+  
+    let results = await esClient.search({
+      _source: false,
+      suggest: {
+        suggestion: {
+          prefix: phrase,
+          completion: {
+            field: 'suggest',
+            skip_duplicates: true
+          }
         }
-      }
-    },
-    _source: false
-  });
-
-  results = results.suggest.suggestion[0].options;
-
-  let output = results.map((r) => {
-    return r.text;
-  });
-
-  suggestCache.set(phrase, output);
-  res.json(output);
+      },
+      _source: false
+    });
+  
+    results = results.suggest.suggestion[0].options;
+  
+    let output = results.map((r) => {
+      return r.text;
+    });
+  
+    suggestCache.set(phrase, output);
+    res.json(output);
+  } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
 });
 
 app.post('/index/refresh', async function (req, res) {

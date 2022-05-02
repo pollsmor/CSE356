@@ -7,6 +7,10 @@
     {
       "name": "index",
       "script": "./index.js"
+    },
+    {
+      "name": "index2",
+      "script": "./index2.js"
     }
   ]
 }

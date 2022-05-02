@@ -43,13 +43,17 @@ app.use(session({
   saveUninitialized: false,
 }));
 
-const serverIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';
+const serverIp = process.env.MAIN_MACHINE;
 const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
 
+// Distribute document IDs evenly
+let firstLetterIdx = 0;
+const letterInterval = Math.floor(26 / 5); // Denominator: amount of doc instances
 function randomStr() {
-  let letter = String.fromCharCode(97 + Math.floor(Math.random() * 26));
+  let letter = String.fromCharCode(97 + (firstLetterIdx % 26));
+  firstLetterIdx += letterInterval;
   return letter + Math.random().toString(36).slice(2);
 }
 

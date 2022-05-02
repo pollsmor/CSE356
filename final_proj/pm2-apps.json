@@ -5,6 +5,10 @@
       "script": "./proxy.js"
     },
     {
+      "name": "proxy2",
+      "script": "./proxy2.js"
+    },
+    {
       "name": "stateless",
       "script": "./stateless.js"
     },

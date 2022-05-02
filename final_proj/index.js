@@ -2,20 +2,16 @@ require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
+const session = require('cookie-session');
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
 const { Client } = require('@elastic/elasticsearch');
 const { convert } = require('html-to-text');
 
-// Mongoose models
-const DocInfo = require('./models/docinfo');
-
-// Session handling
-const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
+// Connect to Mongoose + models
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
+const DocInfo = require('./models/docinfo');
 
 // Setup ShareDB
 const app = express();
@@ -57,14 +53,12 @@ const suggestCache = new Map();
 app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use(session({
-  secret: 'secret',
-  store: store,
-  resave: false,
-  saveUninitialized: false,
+  name: 'session',
+  keys: ['secret']
 }));
-app.use(function(req, res, next) {
-  res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
-  next(); // Set ID header for every route
+app.use(function(req, res, next) { // Session handling
+  if (req.session.name) next();
+  else res.json({ error: true, message: 'Session not found.' });
 });
 
 const server = app.listen(3002, () => {
@@ -73,88 +67,84 @@ const server = app.listen(3002, () => {
 
 // Milestone 3: Search/Suggest
 app.get('/index/search', async function (req, res) {
-  if (req.session.name) {
-    let phrase = req.query.q;
-    if (phrase == null) 
-      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+  let phrase = req.query.q;
+  if (phrase == null) 
+    return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
-    // Reuse cached results
-    if (searchCache.has(phrase))
-      return res.json(searchCache.get(phrase));
+  // Reuse cached results
+  if (searchCache.has(phrase))
+    return res.json(searchCache.get(phrase));
 
-    let results = await esClient.search({
-      index: 'docs',
-      query: {
-        multi_match: { 
-          query: phrase,
-          type: 'phrase_prefix',
-          fields: ['contents', 'docName']
-        }
+  let results = await esClient.search({
+    index: 'docs',
+    query: {
+      multi_match: { 
+        query: phrase,
+        type: 'phrase_prefix',
+        fields: ['contents', 'docName']
+      }
+    },
+    fields: ['docName', 'contents'],
+    _source: false,
+    highlight: {
+      fields: { 
+        contents: {},
       },
-      fields: ['docName', 'contents'],
-      _source: false,
-      highlight: {
-        fields: { 
-          contents: {},
-        },
-        fragment_size: 400,
-        order: 'score',
-        max_analyzed_offset: 999999       
-      },
-      size: 10
-    });
+      fragment_size: 400,
+      order: 'score',
+      max_analyzed_offset: 999999       
+    },
+    size: 10
+  });
 
-    results = results.hits.hits;
-    let output = await Promise.all(results.map(async (r) => {
-      let docId = r._id;
-      let docinfo = await DocInfo.findOne({ docId: docId });
-      let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
+  results = results.hits.hits;
+  let output = await Promise.all(results.map(async (r) => {
+    let docId = r._id;
+    let docinfo = await DocInfo.findOne({ docId: docId });
+    let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
 
-      return {
-        docid: docId,
-        name: docinfo.name,
-        snippet: snippet
-      };
-    }));
+    return {
+      docid: docId,
+      name: docinfo.name,
+      snippet: snippet
+    };
+  }));
 
-    searchCache.set(phrase, output);
-    res.json(output);
-  } else res.json({ error: true, message: '[SEARCH] Session not found.' });
+  searchCache.set(phrase, output);
+  res.json(output);
 });
 
 app.get('/index/suggest', async function (req, res) {
-  if (req.session.name) {
-    let phrase = req.query.q;
-    if (phrase == null) 
-      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+  let phrase = req.query.q;
+  if (phrase == null) 
+    return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
-    // Reuse cached results
-    if (suggestCache.has(phrase))
-      return res.json(suggestCache.get(phrase));
+  // Reuse cached results
+  if (suggestCache.has(phrase))
+    return res.json(suggestCache.get(phrase));
 
-    let results = await esClient.search({
-      _source: false,
-      suggest: {
-        suggestion: {
-          prefix: phrase,
-          completion: {
-            field: 'suggest',
-            skip_duplicates: true
-          }
+  let results = await esClient.search({
+    _source: false,
+    suggest: {
+      suggestion: {
+        prefix: phrase,
+        completion: {
+          field: 'suggest',
+          skip_duplicates: true
         }
-      },
-      _source: false
-    });
+      }
+    },
+    _source: false
+  });
 
-    results = results.suggest.suggestion[0].options;
+  results = results.suggest.suggestion[0].options;
 
-    let output = results.map((r) => {
-      return r.text;
-    });
+  let output = results.map((r) => {
+    return r.text;
+  });
 
-    suggestCache.set(phrase, output);
-    res.json(output);
-  } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
+  suggestCache.set(phrase, output);
+  res.json(output);
 });
 
 app.post('/index/refresh', async function (req, res) {

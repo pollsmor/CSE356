@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const session = require('cookie-session');
 
 /*
 Port 3000: This proxy server
@@ -8,7 +7,7 @@ Port 3001: Contains stateless services (i.e. login)
 */
 const app = express();
 const machineIps = process.env.WORKER_MACHINES.split(' ');
-const proxyPort = 3000;
+const proxyPort = 3003;
 const proxy = require('http-proxy').createProxyServer({ 
   host: process.env.MAIN_MACHINE,
   port: proxyPort
@@ -17,16 +16,6 @@ const proxy = require('http-proxy').createProxyServer({
 // Assign new documents to machines equally
 const machineAssignedToDocs = {};
 let machineIpIdx = 0;
-
-// Session handling middleware
-app.use(session({
-  name: 'session',
-  keys: ['secret']
-}));
-app.use(function(req, res, next) { 
-  if (req.session.name) next();
-  else res.json({ error: true, message: 'Session not found.' });
-});
 
 app.listen(proxyPort, () => {
   console.log(`Google Docs Clone is now running on port ${proxyPort}.`);
@@ -80,8 +69,8 @@ app.use('/doc/get/:docid/:uid', function (req, res, next) {
 
 // Need to be connected to doc first
 app.use('/doc/presence/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
-  }, next);
+    let docId = req.params.docid;
+    proxy.web(req, res, {
+      target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
+    }, next);
 });

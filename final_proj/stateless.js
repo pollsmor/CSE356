@@ -51,7 +51,8 @@ const server = app.listen(3001, () => {
 });
 
 function randomStr() {
-  return Math.random().toString(36).slice(2);
+  let letter = String.fromCharCode(97 + Math.floor(Math.random() * 26));
+  return letter + Math.random().toString(36).slice(2);
 }
 
 // Routes ====================================================================

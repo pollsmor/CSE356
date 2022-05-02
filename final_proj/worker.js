@@ -115,21 +115,20 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', async function (req, res) {
   let docId = req.params.docid;
-  let uid = req.params.uid;
   let version = req.body.version;
   let op = req.body.op;
 
   let doc = connection.get('docs', docId);
   if (version == docVersions[docId]) {
     docVersions[docId]++;
-    doc.submitOp(op, { source: uid }, (err) => {
+    doc.submitOp(op, (err) => {
       if (err)
         return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
       let users_of_doc = users_of_docs.get(docId);
       op = JSON.stringify(op);
       users_of_doc.forEach((otherRes, otherUid) => {
-        if (uid !== otherUid)
+        if (req.params.uid !== otherUid)
           otherRes.write(`data: ${op}\n\n`);
         else 
           otherRes.write(`data: { "ack": ${op} }\n\n`);
@@ -161,16 +160,15 @@ app.get('/doc/get/:docid/:uid', async function (req, res) {
 
 // Presence
 app.post('/doc/presence/:docid/:uid', async function(req, res) {
-  let docId = req.params.docid;
   let uid = req.params.uid;
   let presenceData = JSON.stringify({
     index: req.body.index,
     length: req.body.length,
-    name: uid
+    name: uid // He doesn't even check for name :D
   });
 
   // Broadcast presence to everyone else
-  let users_of_doc = users_of_docs.get(docId);
+  let users_of_doc = users_of_docs.get(req.params.docid);
   users_of_doc.forEach((otherRes, otherUid) => {
     if (uid !== otherUid)
       otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": ${presenceData} }}\n\n`);

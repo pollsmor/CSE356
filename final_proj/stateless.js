@@ -88,7 +88,7 @@ app.post('/users/login', async function (req, res) {
 
 app.post('/users/logout', function (req, res) {
   if (req.session.name) {
-    req.session = null;
+    req.session.destroy();
     res.json({});
   } else res.json({ error: true, message: '[LOGOUT] You are already logged out.' }); 
 });

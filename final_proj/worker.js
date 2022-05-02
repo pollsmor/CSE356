@@ -1,15 +1,10 @@
 require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
-const mongoose = require('mongoose');
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
 const axios = require('axios');
-
-// Connect to Mongoose + models
-mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
-const DocInfo = require('./models/docinfo'); 
 
 // Setup ShareDB
 const app = express();
@@ -37,22 +32,6 @@ const server = app.listen(80, () => {
 });
 
 // Routes ====================================================================
-app.get('/doc/edit/:docid', async function (req, res) {
-  let docId = req.params.docid;
-
-  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
-  let docinfo = await DocInfo.findOne({ docId: docId }).lean();
-  if (docinfo == null) { // Document does not exist
-    res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
-  } else {
-    res.render('doc', {
-      name: req.session.name,
-      email: req.session.email,
-      docName: docinfo.name,
-      docId: docId
-    });
-  }
-});
 
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', async function (req, res) {

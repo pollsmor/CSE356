@@ -1,5 +1,7 @@
 require('dotenv').config();
+const mongoUri = process.env.MONGO_URI;
 const express = require('express');
+const mongoose = require('mongoose');
 const session = require('cookie-session');
 
 /*
@@ -13,6 +15,10 @@ const proxy = require('http-proxy').createProxyServer({
   host: process.env.MAIN_MACHINE,
   port: proxyPort
 });
+
+// Connect to Mongoose + models
+mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
+const DocInfo = require('./models/docinfo'); 
 
 // Assign new documents to machines equally
 const machineAssignedToDocs = {};
@@ -33,16 +39,26 @@ app.listen(proxyPort, () => {
 });
 
 // Proxy requests =========================================================
-app.use('/doc/edit/:docid', function (req, res, next) {
+// Easier to just put edit route right here
+app.get('/doc/edit/:docid', async function (req, res) {
   let docId = req.params.docid;
   if (!(docId in machineAssignedToDocs)) {
     machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
     if (machineIpIdx == machineIps.length) machineIpIdx = 0;
   }
 
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
-  }, next);
+  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
+  let docinfo = await DocInfo.findOne({ docId: docId }).lean();
+  if (docinfo == null) { // Document does not exist
+    res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
+  } else {
+    res.render('doc', {
+      name: req.session.name,
+      email: req.session.email,
+      docName: docinfo.name,
+      docId: docId
+    });
+  }
 });
 
 // Distribute load based on document ID

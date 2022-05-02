@@ -31,6 +31,8 @@ const streamHeaders = {
 };
 
 // Middleware
+app.set('view engine', 'ejs');
+app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use(session({
   secret: 'secret',
@@ -49,6 +51,8 @@ const server = app.listen(80, () => {
 
 // Routes ====================================================================
 app.get('/doc/edit/:docid', async function (req, res) {
+  let docId = req.params.docid;
+
   // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
   let docinfo = await DocInfo.findOne({ docId: docId }).lean();
   if (docinfo == null) { // Document does not exist

@@ -2,7 +2,8 @@ require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('cookie-session');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
@@ -12,6 +13,7 @@ const { convert } = require('html-to-text');
 // Connect to Mongoose + models
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const DocInfo = require('./models/docinfo');
+const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
 // Setup ShareDB
 const app = express();
@@ -53,8 +55,10 @@ const suggestCache = new Map();
 app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use(session({
-  name: 'session',
-  keys: ['secret']
+  secret: 'secret',
+  store: store,
+  resave: false,
+  saveUninitialized: false,
 }));
 app.use(function(req, res, next) { // Session handling
   if (req.session.name) next();

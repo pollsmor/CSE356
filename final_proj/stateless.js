@@ -44,10 +44,6 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
 }));
-app.use(function(req, res, next) {
-  res.setHeader('X-CSE356', '61f9f57773ba724f297db6bf');
-  next(); // Set ID header for every route
-});
 
 const serverIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';
 const server = app.listen(3001, () => {

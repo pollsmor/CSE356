@@ -17,12 +17,12 @@ const proxy = require('http-proxy').createProxyServer({
 const machineAssignedToDocs = {};
 let machineIpIdx = 0;
 
-const server = app.listen(proxyPort, () => {
+app.listen(proxyPort, () => {
   console.log(`Google Docs Clone is now running on port ${proxyPort}.`);
 });
 
-// Proxy requests =========================================================
-app.use('/doc/edit/:docid', function (req, res, next) {
+// Proxy requests, distribute load by doc ID
+app.use('/doc/*/:docid', function (req, res, next) {
   let docId = req.params.docid;
   if (!(docId in machineAssignedToDocs)) {
     machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
@@ -30,45 +30,6 @@ app.use('/doc/edit/:docid', function (req, res, next) {
   }
 
   proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/edit/${docId}`
+    target: `http://${machineAssignedToDocs[docId]}${req.originalUrl}`
   }, next);
-});
-
-// Distribute load based on document ID
-app.use('/doc/connect/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  if (!(docId in machineAssignedToDocs)) {
-    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
-    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
-  }
-
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/connect/${docId}/${req.params.uid}`
-  }, next);
-});
-
-app.use('/doc/op/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/op/${docId}/${req.params.uid}`
-  }, next);
-});
-
-app.use('/doc/get/:docid/:uid', function (req, res, next) {
-  let docId = req.params.docid;
-  if (!(docId in machineAssignedToDocs)) {
-    machineAssignedToDocs[docId] = machineIps[machineIpIdx++];
-    if (machineIpIdx == machineIps.length) machineIpIdx = 0;
-  }
-
-  proxy.web(req, res, {
-    target: `http://${machineAssignedToDocs[docId]}/doc/get/${docId}/${req.params.uid}`
-  }, next);
-});
-
-app.use('/doc/presence/:docid/:uid', function (req, res, next) {
-    let docId = req.params.docid;
-    proxy.web(req, res, {
-      target: `http://${machineAssignedToDocs[docId]}/doc/presence/${docId}/${req.params.uid}`
-    }, next);
 });

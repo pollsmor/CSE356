@@ -2,8 +2,7 @@ require('dotenv').config();
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
+const session = require('cookie-session');
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const nodemailer = require('nodemailer');
@@ -11,13 +10,10 @@ const fileUpload = require('express-fileupload');
 const path = require('path');
 const fs = require('fs');
 
-// Mongoose models
+// Connect to Mongoose + models
+mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const User = require('./models/user');
 const DocInfo = require('./models/docinfo');
-
-// Session handling
-const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
-mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 
 // Setup ShareDB
 const app = express();
@@ -39,10 +35,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
 app.use(fileUpload({ createParentPath: true, abortOnLimit: true }));
 app.use(session({
-  secret: 'secret',
-  store: store,
-  resave: false,
-  saveUninitialized: false,
+  name: 'session',
+  keys: ['secret']
 }));
 
 const serverIp = 'teamsolokid.cse356.compas.cs.stonybrook.edu';

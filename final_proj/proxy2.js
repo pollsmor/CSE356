@@ -24,7 +24,8 @@ const DocInfo = require('./models/docinfo');
 const machineAssignedToDocs = {};
 let machineIpIdx = 0;
 
-// Session handling middleware
+// Middleware
+app.set('view engine', 'ejs');
 app.use(session({
   name: 'session',
   keys: ['secret']

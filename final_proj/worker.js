@@ -13,8 +13,6 @@ const backend = new ShareDB({db});
 const connection = backend.connect();
 
 // Middleware
-app.set('view engine', 'ejs');
-app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 
 // Constants

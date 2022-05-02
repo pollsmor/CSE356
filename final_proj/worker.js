@@ -1,6 +1,7 @@
 require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
+const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
@@ -13,6 +14,10 @@ const app = express();
 ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
+
+// Connect to Mongoose + models
+mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
+const DocInfo = require('./models/docinfo');
 
 // Constants
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });

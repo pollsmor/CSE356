@@ -122,18 +122,19 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', async function (req, res) {
   let docId = req.params.docid;
+  let uid = req.params.uid;
   let version = req.body.version;
   let op = req.body.op;
 
   let doc = connection.get('docs', docId);
   if (version == docVersions[docId]) {
     docVersions[docId]++;
-    doc.submitOp(op, (err) => {
+    doc.submitOp(op, { source: uid }, (err) => {
       if (err)
         return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
       let users_of_doc = users_of_docs.get(docId);
-      let userRes = users_of_docs.get(docId).get(req.params.uid);
+      let userRes = users_of_docs.get(docId).get(uid);
       userRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
 
       res.json({ status: 'ok' });

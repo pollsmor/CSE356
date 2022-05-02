@@ -84,33 +84,28 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
   let op = req.body.op;
 
   let doc = connection.get('docs', docId);
-  doc.fetch((err) => {
-    if (err) throw err;
-    else if (doc.type == null)
-      return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
+  if (version == docVersions[docId]) {
+    docVersions[docId]++;
+    doc.submitOp(op, { source: uid }, (err) => {
+      if (err)
+        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-    if (version == docVersions[docId]) {
-      docVersions[docId]++;
-      doc.submitOp(op, { source: uid }, (err2) => {
-        if (err2) throw err2;   
-
-        let users_of_doc = users_of_docs.get(docId);
-        op = JSON.stringify(op);
-        users_of_doc.forEach((otherRes, otherUid) => {
-          if (uid !== otherUid)
-            otherRes.write(`data: ${op}\n\n`);
-          else 
-            otherRes.write(`data: { "ack": ${op} }\n\n`);
-        });
-
-        res.json({ status: 'ok' });
+      let users_of_doc = users_of_docs.get(docId);
+      op = JSON.stringify(op);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        if (uid !== otherUid)
+          otherRes.write(`data: ${op}\n\n`);
+        else 
+          otherRes.write(`data: { "ack": ${op} }\n\n`);
       });
-    } else if (version < docVersions[docId]) {
-      res.json({ status: 'retry' });
-    } else { // Shouldn't get to this point
-      res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-    }
-  });
+
+      res.json({ status: 'ok' });
+    });
+  } else if (version < docVersions[docId]) {
+    res.json({ status: 'retry' });
+  } else { // Shouldn't get to this point
+    res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+  }
 });
 
 // Get HTML of current document

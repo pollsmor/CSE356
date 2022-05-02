@@ -60,11 +60,6 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
 }));
-app.use(function(req, res, next) { // Session handling
-  if (req.session.name) next();
-  else res.json({ error: true, message: 'Session not found.' });
-});
-
 const server = app.listen(3002, () => {
   console.log('Index service running on port 3002.');
 });

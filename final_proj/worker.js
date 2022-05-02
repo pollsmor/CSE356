@@ -1,6 +1,8 @@
 require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
@@ -14,6 +16,16 @@ const connection = backend.connect();
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
+app.use(session({
+  secret: 'secret',
+  store: store,
+  resave: false,
+  saveUninitialized: false,
+}));
+app.use(function(req, res, next) { 
+  if (req.session.name) next();
+  else res.json({ error: true, message: 'Session not found.' });
+});
 
 // Constants
 const docVersions = {};
@@ -30,6 +42,20 @@ const server = app.listen(80, () => {
 });
 
 // Routes ====================================================================
+app.get('/doc/edit/:docid', async function (req, res) {
+  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
+  let docinfo = await DocInfo.findOne({ docId: docId }).lean();
+  if (docinfo == null) { // Document does not exist
+    res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
+  } else {
+    res.render('doc', {
+      name: req.session.name,
+      email: req.session.email,
+      docName: docinfo.name,
+      docId: docId
+    });
+  }
+});
 
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', async function (req, res) {

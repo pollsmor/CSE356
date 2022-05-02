@@ -94,7 +94,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 
     // Setup stream and provide initial document contents
     res.writeHead(200, streamHeaders);
-    res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+    res.write(`data: { "content": ${doc.data.ops}, "version": ${doc.version} }\n\n`);
 
     let receiveOp = (op, source) => {
       if (source !== uid) res.write(`data: ${op}\n\n`);
@@ -133,8 +133,7 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
         return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
       let users_of_doc = users_of_docs.get(docId);
-      op = JSON.stringify(op);
-      let userRes = users_of_docs.get(docId).get(uid);
+      let userRes = users_of_docs.get(docId).get(req.params.uid);
       userRes.write(`data: { "ack": ${op} }\n\n`);
 
       res.json({ status: 'ok' });
@@ -164,11 +163,11 @@ app.get('/doc/get/:docid/:uid', async function (req, res) {
 // Presence
 app.post('/doc/presence/:docid/:uid', async function(req, res) {
   let uid = req.params.uid;
-  let presenceData = JSON.stringify({
+  let presenceData = {
     index: req.body.index,
     length: req.body.length,
     name: uid // He doesn't even check for name :D
-  });
+  };
 
   // Broadcast presence to everyone else
   let users_of_doc = users_of_docs.get(req.params.docid);

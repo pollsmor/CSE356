@@ -90,7 +90,7 @@ app.get('/index/search', async function (req, res) {
         fields: { 
           contents: {},
         },
-        fragment_size: 400,
+        fragment_size: 500,
         order: 'score',
         max_analyzed_offset: 999999,
         type: 'plain'   

@@ -96,14 +96,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
     res.writeHead(200, streamHeaders);
     res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
 
-    let receiveOp = (op, source) => {
-      if (source !== uid) res.write(`data: ${JSON.stringify(op)}\n\n`);
-    };
-    doc.on('op', receiveOp);
-
     res.on('close', () => {
-      doc.off('op', receiveOp);
-
       // Broadcast presence disconnection
       let users_of_doc = users_of_docs.get(docId);
       users_of_doc.delete(uid);
@@ -134,8 +127,13 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
         return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
       let users_of_doc = users_of_docs.get(docId);
-      let userRes = users_of_docs.get(docId).get(uid);
-      userRes.write(`data: { "ack": ${JSON.stringify(op)} }\n\n`);
+      op = JSON.stringify(op);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        if (source !== uid) 
+          otherRes.write(`data: ${op}\n\n`);
+        else 
+          otherRes.write(`data: { "ack": ${op} }\n\n`);
+      });
 
       res.json({ status: 'ok' });
     });

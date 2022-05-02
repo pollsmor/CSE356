@@ -14,6 +14,17 @@ ShareDB.types.register(require('rich-text').type); // Quill uses Rich Text
 const backend = new ShareDB({db});
 const connection = backend.connect();
 
+// Constants
+const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
+const docVersions = {};
+const users_of_docs = new Map();
+const streamHeaders = {
+  'Content-Type': 'text/event-stream',
+  'Connection': 'keep-alive',
+  'Cache-Control': 'no-cache',
+  'X-Accel-Buffering': 'no'
+};
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(session({
@@ -26,16 +37,6 @@ app.use(function(req, res, next) {
   if (req.session.name) next();
   else res.json({ error: true, message: 'Session not found.' });
 });
-
-// Constants
-const docVersions = {};
-const users_of_docs = new Map();
-const streamHeaders = {
-  'Content-Type': 'text/event-stream',
-  'Connection': 'keep-alive',
-  'Cache-Control': 'no-cache',
-  'X-Accel-Buffering': 'no'
-};
 
 const server = app.listen(80, () => {
   console.log('Proxy is now running.');

@@ -14,7 +14,7 @@ const quill = new Quill('#editor', {
       url: '/media/upload',
       // Callback obtains a media ID
       callbackOK: (res, next) => {
-        next(`https://${mainMachineIp}/media/access/${res.mediaid}`);
+        next(`http://${mainMachineIp}/media/access/${res.mediaid}`);
       }
     }
   },
@@ -24,7 +24,7 @@ const quill = new Quill('#editor', {
 quill.on('text-change', (delta, oldDelta, source) => {
   if (source === 'user') {
     queue.push(delta);
-    axios.post(`https://${mainMachineIp}/doc/op/${docId}/${uid}`, {
+    axios.post(`http://${mainMachineIp}/doc/op/${docId}/${uid}`, {
       op: queue[0].ops, 
       version: docVersion
     });

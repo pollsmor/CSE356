@@ -64,12 +64,6 @@ const suggestCache = new Map();
 
 // Middleware
 app.use(express.json());
-// app.use(session({
-//   secret: 'secret',
-//   store: store,
-//   resave: false,
-//   saveUninitialized: false,
-// }));
 const server = app.listen(3002, () => {
   console.log('Index service running on port 3002.');
 });

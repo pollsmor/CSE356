@@ -68,7 +68,7 @@ app.get('/doc/edit/:docid', async function (req, res) {
 });
 
 // Setup Delta event stream
-app.get('/doc/connect/:docid/:uid', async function (req, res) {
+app.get('/doc/connect/:docid/:uid', function (req, res) {
   let docId = req.params.docid;
   let uid = req.params.uid;
 
@@ -113,7 +113,7 @@ app.get('/doc/connect/:docid/:uid', async function (req, res) {
 });
 
 // Submit Delta op to ShareDB and to other users
-app.post('/doc/op/:docid/:uid', async function (req, res) {
+app.post('/doc/op/:docid/:uid', function (req, res) {
   let docId = req.params.docid;
   let version = req.body.version;
   let op = req.body.op;
@@ -144,7 +144,7 @@ app.post('/doc/op/:docid/:uid', async function (req, res) {
 });
 
 // Get HTML of current document
-app.get('/doc/get/:docid/:uid', async function (req, res) {
+app.get('/doc/get/:docid/:uid', function (req, res) {
   let doc = connection.get('docs', req.params.docid);
   doc.fetch((err) => {
     if (doc.type == null)
@@ -159,7 +159,7 @@ app.get('/doc/get/:docid/:uid', async function (req, res) {
 });
 
 // Presence
-app.post('/doc/presence/:docid/:uid', async function(req, res) {
+app.post('/doc/presence/:docid/:uid', function(req, res) {
   let uid = req.params.uid;
   let presenceData = JSON.stringify({
     index: req.body.index,

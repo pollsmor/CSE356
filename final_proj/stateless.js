@@ -140,7 +140,7 @@ app.get('/users/verify', async function (req, res) {
 
 // =====================================================================
 // Collection routes
-app.post('/collection/create', async function (req, res) {
+app.post('/collection/create', function (req, res) {
   if (req.session.name) {
     let docId = randomStr(); // Since documents can share names
     let doc = connection.get('docs', docId); // ShareDB document
@@ -159,7 +159,7 @@ app.post('/collection/create', async function (req, res) {
   } else res.json({ error: true, message: '[CREATE DOC] No session found.' });
 });
 
-app.post('/collection/delete', async function(req, res) {
+app.post('/collection/delete', function(req, res) {
   if (req.session.name) {
     let docId = req.body.docid;
     let doc = connection.get('docs', docId); // ShareDB document
@@ -177,7 +177,7 @@ app.post('/collection/delete', async function(req, res) {
   } else res.json({ error: true, message: '[DELETE DOC] No session found.' });
 });
 
-app.get('/collection/list', async function (req, res) {
+app.get('/collection/list', function (req, res) {
   if (req.session.name) {
     connection.createFetchQuery('docs', {
       $sort: {'_m.mtime': -1 }, // Sort by modification time, latest to earliest
@@ -220,7 +220,7 @@ app.post('/media/upload', function (req, res) {
   } else res.json({ error: true, message: '[UPLOAD] Session not found.' });
 });
 
-app.get('/media/access/:mediaid', async function (req, res) {
+app.get('/media/access/:mediaid', function (req, res) {
   if (req.session.name) {
     let fileName = req.params.mediaid;
     let filePath = __dirname + '/public/img/' + fileName;

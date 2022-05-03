@@ -35,12 +35,12 @@ quill.on('text-change', (delta, oldDelta, source) => {
 quill.on('selection-change', (range, oldRange, source) => {
   if (source === 'user') {
     if (range != null) { // Cursor is in the editor
-      axios.post(`https://${mainMachineIp}/doc/presence/${docId}/${uid}`, range);
+      axios.post(`http://${mainMachineIp}/doc/presence/${docId}/${uid}`, range);
     }
   }
 });
 
-const stream = new EventSource(`https://${mainMachineIp}/doc/connect/${docId}/${uid}`);
+const stream = new EventSource(`http://${mainMachineIp}/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
   message = JSON.parse(message.data);
   if ('content' in message) { // Set initial editor contents
@@ -57,7 +57,7 @@ stream.addEventListener('message', message => {
 
     // Work on the queue
     if (queue.length > 0) {
-      axios.post(`https://${mainMachineIp}/doc/op/${docId}/${uid}`, {
+      axios.post(`http://${mainMachineIp}/doc/op/${docId}/${uid}`, {
         op: queue[0].ops, 
         version: docVersion
       });
@@ -76,7 +76,7 @@ stream.addEventListener('message', message => {
       });
 
       // Work on the queue
-      axios.post(`https://${mainMachineIp}/doc/op/${docId}/${uid}`, {
+      axios.post(`http://${mainMachineIp}/doc/op/${docId}/${uid}`, {
         op: queue[0], 
         version: docVersion
       });

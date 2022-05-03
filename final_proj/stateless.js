@@ -118,7 +118,7 @@ app.post('/users/signup', async function (req, res) {
   transport.sendMail({
       to: email,
       subject: 'Verification key',
-      text: `https://${serverIp}/users/verify?email=${encodedEmail}&key=${key}`
+      text: `http://${serverIp}/users/verify?email=${encodedEmail}&key=${key}`
   });
 
   res.json({});

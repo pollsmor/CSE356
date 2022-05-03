@@ -2,8 +2,6 @@ require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
@@ -13,7 +11,6 @@ const { convert } = require('html-to-text');
 // Connect to Mongoose + models
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const DocInfo = require('./models/docinfo');
-const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
 // Setup ShareDB
 const app = express();
@@ -49,6 +46,7 @@ esClient.indices.create({
       properties: {
         contents: {
           type: 'text',
+          term_vector: 'with_positions_offsets',
           analyzer: 'my_analyzer'
         },
         suggest: {
@@ -65,108 +63,102 @@ const searchCache = new Map();
 const suggestCache = new Map();
 
 // Middleware
-app.use(express.static('public'));
-app.use(express.json({ limit: '10mb' }));
-app.use(session({
-  secret: 'secret',
-  store: store,
-  resave: false,
-  saveUninitialized: false,
-}));
+app.use(express.json());
+// app.use(session({
+//   secret: 'secret',
+//   store: store,
+//   resave: false,
+//   saveUninitialized: false,
+// }));
 const server = app.listen(3002, () => {
   console.log('Index service running on port 3002.');
 });
 
 // Milestone 3: Search/Suggest
 app.get('/index/search', async function (req, res) {
-  if (req.session.name) {
-    let phrase = req.query.q;
-    if (phrase == null) 
-      return res.json({ error: true, message: '[SEARCH] Empty query string.' });
+  let phrase = req.query.q;
+  if (phrase == null) 
+    return res.json({ error: true, message: '[SEARCH] Empty query string.' });
 
-    // Reuse cached results
-    if (searchCache.has(phrase))
-      return res.json(searchCache.get(phrase));
+  // Reuse cached results
+  if (searchCache.has(phrase))
+    return res.json(searchCache.get(phrase));
 
-    let results = await esClient.search({
-      index: 'docs',
-      query: {
-        match_phrase_prefix: {
-          contents: {
-            query: phrase
-          }
+  let results = await esClient.search({
+    index: 'docs',
+    query: {
+      match_phrase_prefix: {
+        contents: {
+          query: phrase
         }
+      }
+    },
+    fields: ['docName', 'contents'],
+    _source: false,
+    highlight: {
+      fields: { 
+        contents: {},
       },
-      fields: ['docName', 'contents'],
-      _source: false,
-      highlight: {
-        fields: { 
-          contents: {},
-        },
-        fragment_size: 500,
-        order: 'score',
-        max_analyzed_offset: 999999,
-        type: 'plain'   
-      },
-      size: 10
+      fragment_size: 200,
+      order: 'score',
+      type: 'fvh'   
+    },
+    size: 10
+  });
+
+  results = results.hits.hits;
+  let docIds = results.map((r) => {
+    return r._id;
+  });
+
+  let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
+  let output = [];
+  for (let i = 0; i < docIds.length; i++) {
+    let result = results[i];
+    let snippet = 'highlight' in result ? result.highlight.contents[0] : '';
+
+    output.push({
+      docid: result._id,
+      name: docinfos[i].name,
+      snippet: snippet
     });
+  }
 
-    results = results.hits.hits;
-    let docIds = results.map((r) => {
-      return r._id;
-    });
-
-    let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
-    let output = [];
-    for (let i = 0; i < docIds.length; i++) {
-      let result = results[i];
-      let snippet = 'highlight' in result ? result.highlight.contents[0] : '';
-
-      output.push({
-        docid: result._id,
-        name: docinfos[i].name,
-        snippet: snippet
-      });
-    }
-
-    searchCache.set(phrase, output);
-    res.json(output);
-  } else res.json({ error: true, message: '[SEARCH] Session not found.' });
+  searchCache.set(phrase, output);
+  res.json(output);
 });
 
 app.get('/index/suggest', async function (req, res) {
-  if (req.session.name) {
-    let phrase = req.query.q;
-    if (phrase == null) 
-      return res.json({ error: true, message: '[SUGGEST] Empty query string.' });
-  
-    // Reuse cached results
-    if (suggestCache.has(phrase))
-      return res.json(suggestCache.get(phrase));
-  
-    let results = await esClient.search({
-      _source: false,
-      suggest: {
-        suggestion: {
-          prefix: phrase,
-          completion: {
-            field: 'suggest',
-            skip_duplicates: true
-          }
+  let phrase = req.query.q;
+  if (phrase == null) 
+    return res.json({ error: true, message: '[SUGGEST] Empty query string.' });
+
+  // Reuse cached results
+  if (suggestCache.has(phrase))
+    return res.json(suggestCache.get(phrase));
+
+  let results = await esClient.search({
+    _source: false,
+    suggest: {
+      suggestion: {
+        prefix: phrase,
+        completion: {
+          field: 'suggest',
+          skip_duplicates: true
         }
-      },
-      _source: false
-    });
-  
-    results = results.suggest.suggestion[0].options;
-  
-    let output = results.map((r) => {
-      return r.text;
-    });
-  
-    suggestCache.set(phrase, output);
-    res.json(output);
-  } else res.json({ error: true, message: '[SUGGEST] Session not found.' });
+      }
+    },
+    _source: false
+  });
+
+  results = results.suggest.suggestion[0].options;
+
+  let output = results.map((r) => {
+    return r.text;
+  });
+
+  suggestCache.set(phrase, output);
+  res.json(output);
 });
 
 app.post('/index/refresh', async function (req, res) {

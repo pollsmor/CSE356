@@ -33,9 +33,9 @@ const transport = nodemailer.createTransport({
 // Middleware
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
-app.use(fileUpload({ createParentPath: true, abortOnLimit: true }));
+app.use('/media/upload', fileUpload({ createParentPath: true, abortOnLimit: true }));
 app.use(session({
   secret: 'secret',
   store: store,
@@ -49,12 +49,12 @@ const server = app.listen(3001, () => {
 });
 
 // Distribute document IDs evenly
-let firstLetterIdx = 0;
-const letterInterval = Math.floor(26 / 5); // Denominator: amount of doc instances
+const docInstances = 4;
+let docFirstDigit = 0;
 function randomStr() {
-  let letter = String.fromCharCode(97 + (firstLetterIdx % 26));
-  firstLetterIdx += letterInterval;
-  return letter + Math.random().toString(36).slice(2);
+  let docId = (docFirstDigit++) + Math.random().toString(36).slice(2);
+  if (docFirstDigit > docInstances) docFirstDigit = 0; // Loop back
+  return docId;
 }
 
 // Routes ====================================================================

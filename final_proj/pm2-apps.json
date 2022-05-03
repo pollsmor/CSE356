@@ -6,11 +6,9 @@
     },
     {
       "name": "index",
-      "script": "./index.js"
-    },
-    {
-      "name": "index2",
-      "script": "./index2.js"
+      "script": "./index.js",
+      "instances": 2,
+      "exec_mode": "cluster"
     }
   ]
 }

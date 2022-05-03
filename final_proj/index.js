@@ -33,10 +33,23 @@ const esClient = new Client({
 esClient.indices.create({
   index: 'docs',
   body: { 
+    settings: {
+      refresh_interval: '10s',
+      analysis: {
+        analyzer: {
+          my_analyzer: {
+            type: 'custom',
+            tokenizer: 'whitespace',
+            filter: ['stop']
+          }
+        },
+      },
+    },
     mappings: {
       properties: {
         contents: {
           type: 'text',
+          analyzer: 'my_analyzer'
         },
         suggest: {
           type: 'completion',
@@ -78,10 +91,10 @@ app.get('/index/search', async function (req, res) {
     let results = await esClient.search({
       index: 'docs',
       query: {
-        multi_match: { 
-          query: phrase,
-          type: 'phrase_prefix',
-          fields: ['contents', 'docName']
+        match_phrase_prefix: {
+          contents: {
+            query: phrase
+          }
         }
       },
       fields: ['docName', 'contents'],
@@ -99,17 +112,22 @@ app.get('/index/search', async function (req, res) {
     });
 
     results = results.hits.hits;
-    let output = await Promise.all(results.map(async (r) => {
-      let docId = r._id;
-      let docinfo = await DocInfo.findOne({ docId: docId });
-      let snippet = 'highlight' in r ? r.highlight.contents[0] : '';
+    let docIds = results.map((r) => {
+      return r._id;
+    });
 
-      return {
-        docid: docId,
-        name: docinfo.name,
+    let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
+    let output = [];
+    for (let i = 0; i < docIds.length; i++) {
+      let result = results[i];
+      let snippet = 'highlight' in result ? result.highlight.contents[0] : '';
+
+      output.push({
+        docid: result._id,
+        name: docinfos[i].name,
         snippet: snippet
-      };
-    }));
+      });
+    }
 
     searchCache.set(phrase, output);
     res.json(output);

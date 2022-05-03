@@ -49,7 +49,7 @@ const server = app.listen(3001, () => {
 });
 
 // Distribute document IDs evenly
-const docInstances = 4;
+const docInstances = 5; // 0-indexed, oops
 let docFirstDigit = 0;
 function randomStr() {
   let docId = (docFirstDigit++) + Math.random().toString(36).slice(2);
@@ -118,7 +118,7 @@ app.post('/users/signup', async function (req, res) {
   transport.sendMail({
       to: email,
       subject: 'Verification key',
-      text: `http://${serverIp}/users/verify?email=${encodedEmail}&key=${key}`
+      text: `https://${serverIp}/users/verify?email=${encodedEmail}&key=${key}`
   });
 
   res.json({});

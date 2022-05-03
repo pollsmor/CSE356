@@ -14,7 +14,7 @@ const quill = new Quill('#editor', {
       url: '/media/upload',
       // Callback obtains a media ID
       callbackOK: (res, next) => {
-        next(`http://${mainMachineIp}/media/access/${res.mediaid}`);
+        next(`https://${mainMachineIp}/media/access/${res.mediaid}`);
       }
     }
   },
@@ -24,7 +24,7 @@ const quill = new Quill('#editor', {
 quill.on('text-change', (delta, oldDelta, source) => {
   if (source === 'user') {
     queue.push(delta);
-    axios.post(`http://${mainMachineIp}/doc/op/${docId}/${uid}`, {
+    axios.post(`https://${mainMachineIp}/doc/op/${docId}/${uid}`, {
       op: queue[0].ops, 
       version: docVersion
     });
@@ -35,12 +35,12 @@ quill.on('text-change', (delta, oldDelta, source) => {
 quill.on('selection-change', (range, oldRange, source) => {
   if (source === 'user') {
     if (range != null) { // Cursor is in the editor
-      axios.post(`http://${mainMachineIp}/doc/presence/${docId}/${uid}`, range);
+      axios.post(`https://${mainMachineIp}/doc/presence/${docId}/${uid}`, range);
     }
   }
 });
 
-const stream = new EventSource(`http://${mainMachineIp}/doc/connect/${docId}/${uid}`);
+const stream = new EventSource(`https://${mainMachineIp}/doc/connect/${docId}/${uid}`);
 stream.addEventListener('message', message => {
   message = JSON.parse(message.data);
   if ('content' in message) { // Set initial editor contents
@@ -57,7 +57,7 @@ stream.addEventListener('message', message => {
 
     // Work on the queue
     if (queue.length > 0) {
-      axios.post(`http://${mainMachineIp}/doc/op/${docId}/${uid}`, {
+      axios.post(`https://${mainMachineIp}/doc/op/${docId}/${uid}`, {
         op: queue[0].ops, 
         version: docVersion
       });
@@ -76,7 +76,7 @@ stream.addEventListener('message', message => {
       });
 
       // Work on the queue
-      axios.post(`http://${mainMachineIp}/doc/op/${docId}/${uid}`, {
+      axios.post(`https://${mainMachineIp}/doc/op/${docId}/${uid}`, {
         op: queue[0], 
         version: docVersion
       });

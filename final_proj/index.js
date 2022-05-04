@@ -19,13 +19,7 @@ const backend = new ShareDB({db});
 const connection = backend.connect();
 
 // ElasticSearch stuff
-const esClient = new Client({ 
-  cloud: { id: process.env.CLOUD_ID },
-  auth: {
-    username: 'elastic',
-    password: process.env.ELASTIC_PWD
-  }
-});
+const esClient = new Client({ node: 'http://localhost:9200' });
 // Create index if not exists
 esClient.indices.create({
   index: 'docs',

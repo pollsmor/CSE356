@@ -116,7 +116,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 app.post('/doc/op/:docid/:uid', function (req, res) {
   let uid = req.params.uid;
   let docId = req.params.docid;
-  if (uid in users_of_docs.get(docId)) {
+  if (users_of_docs.get(docId).has(uid)) {
     let version = req.body.version;
     let op = req.body.op;
 

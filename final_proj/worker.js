@@ -115,8 +115,8 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', function (req, res) {
   let uid = req.params.uid;
+  let docId = req.params.docid;
   if (uid in users_of_docs.get(docId)) {
-    let docId = req.params.docid;
     let version = req.body.version;
     let op = req.body.op;
 

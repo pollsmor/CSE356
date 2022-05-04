@@ -34,13 +34,13 @@ const streamHeaders = {
 app.set('view engine', 'ejs');
 app.use('/doc/edit', express.static('public'));
 app.use(express.json({ limit: '10mb' }));
-app.use('/edit', session({
+app.use('/doc/edit', session({
   secret: 'secret',
   store: store,
   resave: false,
   saveUninitialized: false,
 }));
-app.use('/connect', session({
+app.use('/doc/connect', session({
   secret: 'secret',
   store: store,
   resave: false,

@@ -2,7 +2,8 @@ require('dotenv').config();
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('cookie-session');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const nodemailer = require('nodemailer');
@@ -14,6 +15,7 @@ const fs = require('fs');
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const User = require('./models/user');
 const DocInfo = require('./models/docinfo');
+const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
 // Setup ShareDB
 const app = express();
@@ -35,8 +37,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Parse HTML form data as JSON
 app.use('/media/upload', fileUpload({ createParentPath: true, abortOnLimit: true }));
 app.use(session({
-  name: 'session',
-  keys: ['secret'],
+  secret: 'secret',
+  store: store,
+  resave: false,
+  saveUninitialized: false,
 }));
 
 const serverIp = process.env.MAIN_MACHINE;
@@ -88,7 +92,7 @@ app.post('/users/login', async function (req, res) {
 
 app.post('/users/logout', function (req, res) {
   if (req.session.name) {
-    req.session = null;
+    req.session.destroy();
     res.json({});
   } else res.json({ error: true, message: '[LOGOUT] You are already logged out.' }); 
 });

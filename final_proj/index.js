@@ -157,27 +157,32 @@ app.get('/index/suggest', async function (req, res) {
 
 app.post('/index/refresh', async function (req, res) {
   let docIds = req.body.docIds;
-  let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
-  for (let i = 0; i < docIds.length; i++) {
-    let doc = connection.get('docs', docIds[i]);
-    doc.fetch(async (err) => {
-      if (err) throw err;
-      else if (doc.type == null) return; // Not necessarily an error
+  connection.createFetchQuery('docs', {
+    _id: { $in: docIds }
+  }, {}, async (err, results) => {
+    let relevantDocIds = [];
+    let relevantDocData = [];
+    for (let result of results) {
+      relevantDocIds.push(result.id);
+      relevantDocData.push(result.data.ops);
+    }
 
-      let converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+    let docinfos = await DocInfo.find({ docId: { $in: relevantDocIds }}).lean();
+    for (let i = 0; i < relevantDocIds.length; i++) {
+      let converter = new QuillDeltaToHtmlConverter(relevantDocData[i], {});
       let html = convert(converter.convert()); // Convert converted HTML to text
       let words = html.split(/\s+/); // Delimit by "spacey" characters
       await esClient.index({
         index: 'docs',
-        id: docIds[i],
+        id: releavntDocIds[i],
         body: {
           docName: docinfos[i].name,
           contents: html,
           suggest: words
         }
       });
-    });
-  }
+    }
 
-  res.json({ status: 'success '});
+    res.json({ status: 'success '});
+  });
 });

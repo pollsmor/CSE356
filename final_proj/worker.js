@@ -2,7 +2,8 @@ require('dotenv').config()
 const mongoUri = process.env.MONGO_URI;
 const express = require('express');
 const mongoose = require('mongoose');
-const session = require('cookie-session');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
 const ShareDB = require('sharedb');
 const db = require('sharedb-mongo')(mongoUri);
 const { QuillDeltaToHtmlConverter } = require('quill-delta-to-html');
@@ -19,6 +20,7 @@ mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const DocInfo = require('./models/docinfo');
 
 // Constants
+const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 const docVersions = {};
 const users_of_docs = new Map();
 const streamHeaders = {
@@ -33,8 +35,10 @@ app.set('view engine', 'ejs');
 app.use('/doc/edit', express.static('public'));
 app.use(express.json({ limit: '10mb' }));
 app.use('/doc/edit', session({
-  name: 'session',
-  keys: ['secret'],
+  secret: 'secret',
+  store: store,
+  resave: false,
+  saveUninitialized: false
 }));
 
 const server = app.listen(80, () => {

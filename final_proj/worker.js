@@ -113,7 +113,9 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 
       if (users_of_doc.size === 0) {
         users_of_docs.delete(docId);
-        delete docVersions[docId];
+        setTimeout(() => {
+          delete docVersions[docId]; // Don't stop indexing immediately
+        }, 10000);
       }
     });
   });

@@ -3,6 +3,12 @@
     {
       "name": "stateless",
       "script": "./stateless.js"
+    },
+    {
+      "name": "index",
+      "script": "./index.js",
+      "instances": 2,
+      "exec_mode": "cluster"
     }
   ]
 }

@@ -121,21 +121,17 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
   let doc = connection.get('docs', docId);
   if (version == docVersions[docId]) {
     docVersions[docId]++;
-    doc.fetch((err) => {
-      if (err) throw err;
-      doc.submitOp(op, (err2) => {
-        if (err2) throw err2;
-        let users_of_doc = users_of_docs.get(docId);
-        op = JSON.stringify(op);
-        users_of_doc.forEach((otherRes, otherUid) => {
-          if (req.params.uid !== otherUid) 
-            otherRes.write(`data: ${op}\n\n`);
-          else 
-            otherRes.write(`data: { "ack": ${op} }\n\n`);
-        });
-  
-        res.json({ status: 'ok' });
+    doc.submitOp(op, (err) => {
+      let users_of_doc = users_of_docs.get(docId);
+      op = JSON.stringify(op);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        if (req.params.uid !== otherUid) 
+          otherRes.write(`data: ${op}\n\n`);
+        else 
+          otherRes.write(`data: { "ack": ${op} }\n\n`);
       });
+
+      res.json({ status: 'ok' });
     });
   } else if (version < docVersions[docId]) {
     res.json({ status: 'retry' });
@@ -181,7 +177,7 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
 // Index into Elasticsearch from time to time
 setInterval(() => {
   if (Object.keys(docVersions).length > 0) {
-    axios.post(`http://${process.env.ELASTIC_INSTANCE_IP}/index/refresh`, {
+    axios.post(`http://${process.env.MAIN_MACHINE}/index/refresh`, {
       docIds: Object.keys(docVersions)
     }).catch(err => {
       console.log(err);

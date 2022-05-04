@@ -19,7 +19,13 @@ const backend = new ShareDB({db});
 const connection = backend.connect();
 
 // ElasticSearch stuff
-const esClient = new Client({ node: 'http://localhost:9200' });
+const esClient = new Client({ 
+  cloud: { id: process.env.CLOUD_ID },
+  auth: {
+    username: 'elastic',
+    password: process.env.ELASTIC_PWD
+  }
+});
 // Create index if not exists
 esClient.indices.create({
   index: 'docs',
@@ -58,8 +64,8 @@ const suggestCache = new Map();
 
 // Middleware
 app.use(express.json());
-const server = app.listen(80, () => {
-  console.log('Index service running on port 80.');
+const server = app.listen(3002, () => {
+  console.log('Index service running on port 3002.');
 });
 
 // Milestone 3: Search/Suggest

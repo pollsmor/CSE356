@@ -58,8 +58,8 @@ const suggestCache = new Map();
 
 // Middleware
 app.use(express.json());
-const server = app.listen(3000, () => {
-  console.log('Index service running on port 3000.');
+const server = app.listen(80, () => {
+  console.log('Index service running on port 80.');
 });
 
 // Milestone 3: Search/Suggest

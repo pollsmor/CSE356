@@ -23,7 +23,6 @@ const DocInfo = require('./models/docinfo');
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 const docVersions = {};
 const users_of_docs = new Map();
-const docConnections = new Map();
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
@@ -70,7 +69,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
   let uid = req.params.uid;
 
   // Get whole document on initial load
-  let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+  let doc = connection.get('docs', docId);
   doc.subscribe((err) => {
     if (err) throw err;
     else if (doc.type == null)
@@ -87,7 +86,6 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 
     // doc.version is too slow, store doc version on initial load of doc
     if (!(docId in docVersions)) {
-      docConnections.set(docId, doc);
       docVersions[docId] = doc.version;
     }
 
@@ -95,8 +93,18 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     res.writeHead(200, streamHeaders);
     res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
 
+    let receiveOp = (op, source) => {
+      let op = JSON.stringify(op);
+      if (source !== uid)
+        res.write(`data: ${op}\n\n`);
+      else
+        res.write(`data: { "ack": ${op} }\n\n`);
+    };
+    doc.on('op', receiveOp);
+
     res.on('close', () => {
       // Broadcast presence disconnection
+      doc.off('op', receiveOp);
       let users_of_doc = users_of_docs.get(docId);
       users_of_doc.delete(uid);
       users_of_doc.forEach((otherRes, otherUid) => {
@@ -118,19 +126,11 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
   let version = req.body.version;
   let op = req.body.op;
 
-  let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+  let doc = connection.get('docs', docId);
   if (version == docVersions[docId]) {
     docVersions[docId]++;
-    doc.submitOp(op, (err) => {
-      let users_of_doc = users_of_docs.get(docId);
-      op = JSON.stringify(op);
-      users_of_doc.forEach((otherRes, otherUid) => {
-        if (uid !== otherUid) 
-          otherRes.write(`data: ${op}\n\n`);
-        else 
-          otherRes.write(`data: { "ack": ${op} }\n\n`);
-      });
-
+    doc.submitOp(op, { source: uid }, (err) => {
+      if (err) throw err;
       res.json({ status: 'ok' });
     });
   } else if (version < docVersions[docId]) {
@@ -143,7 +143,7 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
 // Get HTML of current document
 app.get('/doc/get/:docid/:uid', function (req, res) {
   let docId = req.params.docId;
-  let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+  let doc = connection.get('docs', docId);
   doc.fetch((err) => {
     if (doc.type == null)
     return res.json({ error: true, message: '[GET HTML] Document does not exist!' });

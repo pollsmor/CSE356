@@ -174,7 +174,7 @@ app.post('/index/refresh', async function (req, res) {
       let words = html.split(/\s+/); // Delimit by "spacey" characters
       await esClient.index({
         index: 'docs',
-        id: releavntDocIds[i],
+        id: relevantDocIds[i],
         body: {
           docName: docinfos[i].name,
           contents: html,

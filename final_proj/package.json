@@ -15,7 +15,7 @@
     "path": "^0.12.7",
     "quill-delta-to-html": "^0.12.1",
     "rich-text": "^4.1.0",
-    "sharedb": "^3.0.0",
-    "sharedb-mongo": "^2.0.0"
+    "sharedb": "^2.2.5",
+    "sharedb-mongo": "^1.0.0"
   }
 }

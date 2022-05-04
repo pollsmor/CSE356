@@ -34,16 +34,16 @@ const streamHeaders = {
 app.set('view engine', 'ejs');
 app.use('/doc/edit', express.static('public'));
 app.use(express.json({ limit: '10mb' }));
-app.use('/doc/edit', session({
+app.use(session({
   secret: 'secret',
   store: store,
   resave: false,
   saveUninitialized: false,
 }));
-// app.use(function(req, res, next) { 
-//   if (req.session.name) next();
-//   else res.json({ error: true, message: 'Session not found.' });
-// });
+app.use(function(req, res, next) { 
+  if (req.session.name) next();
+  else res.json({ error: true, message: 'Session not found.' });
+});
 
 const server = app.listen(80, () => {
   console.log('Proxy is now running.');

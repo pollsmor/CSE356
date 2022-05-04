@@ -124,6 +124,7 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     doc.fetch((err) => {
       if (err) throw err;
       doc.submitOp(op, (err) => {
+        if (err2) throw err2;
         let users_of_doc = users_of_docs.get(docId);
         op = JSON.stringify(op);
         users_of_doc.forEach((otherRes, otherUid) => {

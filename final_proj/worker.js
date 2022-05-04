@@ -41,12 +41,6 @@ app.use('/doc/edit', session({
   resave: false,
   saveUninitialized: false
 }));
-app.use('/doc/connect', session({
-  secret: 'secret',
-  store: store,
-  resave: false,
-  saveUninitialized: false
-}));
 
 const server = app.listen(80, () => {
   console.log('Proxy is now running.');
@@ -54,71 +48,67 @@ const server = app.listen(80, () => {
 
 // Routes ====================================================================
 app.get('/doc/edit/:docid', async function (req, res) {
-  if (req.session.name) {
-    let docId = req.params.docid;
+  let docId = req.params.docid;
 
-    // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
-    let docinfo = await DocInfo.findOne({ docId: docId }).lean();
-    if (docinfo == null) { // Document does not exist
-      res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
-    } else {
-      res.render('doc', {
-        name: req.session.name,
-        email: req.session.email,
-        docName: docinfo.name,
-        docId: docId
-      });
-    }
-  } else res.json({ error: true, message: 'Session not found.' });
+  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
+  let docinfo = await DocInfo.findOne({ docId: docId }).lean();
+  if (docinfo == null) { // Document does not exist
+    res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
+  } else {
+    res.render('doc', {
+      name: req.session.name,
+      email: req.session.email,
+      docName: docinfo.name,
+      docId: docId
+    });
+  }
 });
 
 // Setup Delta event stream
 app.get('/doc/connect/:docid/:uid', function (req, res) {
-  if (req.session.name) {
-    let docId = req.params.docid;
-    let uid = req.params.uid;
-  
-    // Get whole document on initial load
-    let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
-    doc.subscribe((err) => {
-      if (err) throw err;
-      else if (doc.type == null)
-      return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
-  
-      // Tie res object to doc
-      if (users_of_docs.has(docId)) {
-        users_of_docs.get(docId).set(uid, res);
-      } else { // Doc not tracked yet
-        let users_of_doc = new Map();
-        users_of_doc.set(uid, res);
-        users_of_docs.set(docId, users_of_doc);
-      }
-  
-      // doc.version is too slow, store doc version on initial load of doc
-      if (!(docId in docVersions)) {
-        docConnections.set(docId, doc);
-        docVersions[docId] = doc.version;
-      }
-  
-      // Setup stream and provide initial document contents
-      res.writeHead(200, streamHeaders);
-      res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
-  
-      res.on('close', () => {
-        // Broadcast presence disconnection
-        let users_of_doc = users_of_docs.get(docId);
-        users_of_doc.delete(uid);
-        users_of_doc.forEach((otherRes, otherUid) => {
-          otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
-        });
-  
-        if (users_of_doc.size === 0) {
-          users_of_docs.delete(docId);
-          delete docVersions.docId;
-        }
+  let docId = req.params.docid;
+  let uid = req.params.uid;
+
+  // Get whole document on initial load
+  let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+  doc.subscribe((err) => {
+    if (err) throw err;
+    else if (doc.type == null)
+    return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
+
+    // Tie res object to doc
+    if (users_of_docs.has(docId)) {
+      users_of_docs.get(docId).set(uid, res);
+    } else { // Doc not tracked yet
+      let users_of_doc = new Map();
+      users_of_doc.set(uid, res);
+      users_of_docs.set(docId, users_of_doc);
+    }
+
+    // doc.version is too slow, store doc version on initial load of doc
+    if (!(docId in docVersions)) {
+      docConnections.set(docId, doc);
+      docVersions[docId] = doc.version;
+    }
+
+    // Setup stream and provide initial document contents
+    res.writeHead(200, streamHeaders);
+    res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
+
+    res.on('close', () => {
+      // Broadcast presence disconnection
+      let users_of_doc = users_of_docs.get(docId);
+      users_of_doc.delete(uid);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        otherRes.write(`data: { "presence": { "id": "${uid}", "cursor": null }}\n\n`);
       });
+
+      if (users_of_doc.size === 0) {
+        users_of_docs.delete(docId);
+        delete docVersions.docId;
+      }
     });
-  } else res.json({ error: true, message: 'Session not found.' });
+  });
 });
 
 // Submit Delta op to ShareDB and to other users

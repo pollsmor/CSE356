@@ -123,7 +123,7 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     docVersions[docId]++;
     doc.fetch((err) => {
       if (err) throw err;
-      doc.submitOp(op, (err) => {
+      doc.submitOp(op, (err2) => {
         if (err2) throw err2;
         let users_of_doc = users_of_docs.get(docId);
         op = JSON.stringify(op);

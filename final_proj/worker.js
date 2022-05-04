@@ -94,7 +94,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     res.write(`data: { "content": ${JSON.stringify(doc.data.ops)}, "version": ${doc.version} }\n\n`);
 
     let receiveOp = (op, source) => {
-      let op = JSON.stringify(op);
+      op = JSON.stringify(op);
       if (source !== uid)
         res.write(`data: ${op}\n\n`);
       else

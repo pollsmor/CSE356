@@ -113,8 +113,9 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 
       if (users_of_doc.size === 0) {
         users_of_docs.delete(docId);
-        setTimeout(() => {
-          delete docVersions[docId]; // Don't stop indexing immediately
+        setTimeout(() => { // Don't stop indexing immediately
+          if (users_of_doc.size === 0) // Check if another user connected during the 10s
+            delete docVersions[docId];
         }, 10000);
       }
     });

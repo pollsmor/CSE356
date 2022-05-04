@@ -142,7 +142,7 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
 
 // Get HTML of current document
 app.get('/doc/get/:docid/:uid', function (req, res) {
-  let docId = req.params.docId;
+  let docId = req.params.docid;
   let doc = connection.get('docs', docId);
   doc.fetch((err) => {
     if (doc.type == null)

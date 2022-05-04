@@ -23,6 +23,7 @@ const DocInfo = require('./models/docinfo');
 const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 const docVersions = {};
 const users_of_docs = new Map();
+const docConnections = new Map();
 const streamHeaders = {
   'Content-Type': 'text/event-stream',
   'Connection': 'keep-alive',
@@ -38,13 +39,13 @@ app.use('/doc/edit', session({
   secret: 'secret',
   store: store,
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: false
 }));
 app.use('/doc/connect', session({
   secret: 'secret',
   store: store,
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: false
 }));
 
 const server = app.listen(80, () => {
@@ -78,7 +79,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     let uid = req.params.uid;
   
     // Get whole document on initial load
-    let doc = connection.get('docs', docId);
+    let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
     doc.subscribe((err) => {
       if (err) throw err;
       else if (doc.type == null)
@@ -94,8 +95,10 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
       }
   
       // doc.version is too slow, store doc version on initial load of doc
-      if (!(docId in docVersions))
+      if (!(docId in docVersions)) {
+        docConnections.set(docId, doc);
         docVersions[docId] = doc.version;
+      }
   
       // Setup stream and provide initial document contents
       res.writeHead(200, streamHeaders);
@@ -126,7 +129,7 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
     let version = req.body.version;
     let op = req.body.op;
 
-    let doc = connection.get('docs', docId);
+    let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
     if (version == docVersions[docId]) {
       docVersions[docId]++;
       doc.submitOp(op, (err) => {
@@ -151,17 +154,20 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
 
 // Get HTML of current document
 app.get('/doc/get/:docid/:uid', function (req, res) {
-  let doc = connection.get('docs', req.params.docid);
-  doc.fetch((err) => {
-    if (doc.type == null)
-    return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
+  let docId = req.params.docId;
+  if (docId in docVersions && users_of_docs.get(docId).has(req.params.uid)) {
+    let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+    doc.fetch((err) => {
+      if (doc.type == null)
+      return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
-    const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-    const html = converter.convert();
+      const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+      const html = converter.convert();
 
-    res.set('Content-Type', 'text/html');
-    res.send(Buffer.from(html));
-  });
+      res.set('Content-Type', 'text/html');
+      res.send(Buffer.from(html));
+    });
+  }
 });
 
 // Presence

@@ -114,33 +114,36 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', function (req, res) {
-  let docId = req.params.docid;
-  let version = req.body.version;
-  let op = req.body.op;
+  let uid = req.params.uid;
+  if (uid in users_of_docs.get(docId)) {
+    let docId = req.params.docid;
+    let version = req.body.version;
+    let op = req.body.op;
 
-  let doc = connection.get('docs', docId);
-  if (version == docVersions[docId]) {
-    docVersions[docId]++;
-    doc.submitOp(op, (err) => {
-      if (err)
-        return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
+    let doc = connection.get('docs', docId);
+    if (version == docVersions[docId]) {
+      docVersions[docId]++;
+      doc.submitOp(op, (err) => {
+        if (err)
+          return res.json({ error: true, message: '[SUBMIT OP] Document does not exist.' });
 
-      let users_of_doc = users_of_docs.get(docId);
-      op = JSON.stringify(op);
-      users_of_doc.forEach((otherRes, otherUid) => {
-        if (req.params.uid !== otherUid) 
-          otherRes.write(`data: ${op}\n\n`);
-        else 
-          otherRes.write(`data: { "ack": ${op} }\n\n`);
+        let users_of_doc = users_of_docs.get(docId);
+        op = JSON.stringify(op);
+        users_of_doc.forEach((otherRes, otherUid) => {
+          if (uid !== otherUid) 
+            otherRes.write(`data: ${op}\n\n`);
+          else 
+            otherRes.write(`data: { "ack": ${op} }\n\n`);
+        });
+
+        res.json({ status: 'ok' });
       });
-
-      res.json({ status: 'ok' });
-    });
-  } else if (version < docVersions[docId]) {
-    res.json({ status: 'retry' });
-  } else { // Shouldn't get to this point
-    res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-  }
+    } else if (version < docVersions[docId]) {
+      res.json({ status: 'retry' });
+    } else { // Shouldn't get to this point
+      res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+    }
+  } else res.json({ error: true, message: '[SUBMIT OP] Session not found.' });
 });
 
 // Get HTML of current document

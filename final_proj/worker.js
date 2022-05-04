@@ -125,31 +125,29 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 app.post('/doc/op/:docid/:uid', function (req, res) {
   let docId = req.params.docid;
   let uid = req.params.uid;
-  if (users_of_docs.get(docId).has(uid)) {
-    let version = req.body.version;
-    let op = req.body.op;
+  let version = req.body.version;
+  let op = req.body.op;
 
-    let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
-    if (version == docVersions[docId]) {
-      docVersions[docId]++;
-      doc.submitOp(op, (err) => {
-        let users_of_doc = users_of_docs.get(docId);
-        op = JSON.stringify(op);
-        users_of_doc.forEach((otherRes, otherUid) => {
-          if (uid !== otherUid) 
-            otherRes.write(`data: ${op}\n\n`);
-          else 
-            otherRes.write(`data: { "ack": ${op} }\n\n`);
-        });
-
-        res.json({ status: 'ok' });
+  let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+  if (version == docVersions[docId]) {
+    docVersions[docId]++;
+    doc.submitOp(op, (err) => {
+      let users_of_doc = users_of_docs.get(docId);
+      op = JSON.stringify(op);
+      users_of_doc.forEach((otherRes, otherUid) => {
+        if (uid !== otherUid) 
+          otherRes.write(`data: ${op}\n\n`);
+        else 
+          otherRes.write(`data: { "ack": ${op} }\n\n`);
       });
-    } else if (version < docVersions[docId]) {
-      res.json({ status: 'retry' });
-    } else { // Shouldn't get to this point
-      res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
-    }
-  } else res.json({ error: true, message: 'Invalid document ID or user.' });
+
+      res.json({ status: 'ok' });
+    });
+  } else if (version < docVersions[docId]) {
+    res.json({ status: 'retry' });
+  } else { // Shouldn't get to this point
+    res.json({ error: true, message: '[SUBMIT OP] Client is somehow ahead of server.' });
+  }
 });
 
 // Get HTML of current document

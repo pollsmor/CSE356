@@ -125,7 +125,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 app.post('/doc/op/:docid/:uid', function (req, res) {
   let docId = req.params.docid;
   let uid = req.params.uid;
-  if (docId in docVersions && users_of_docs.get(docId).has(uid)) {
+  if (users_of_docs.get(docId).has(uid)) {
     let version = req.body.version;
     let op = req.body.op;
 
@@ -155,19 +155,17 @@ app.post('/doc/op/:docid/:uid', function (req, res) {
 // Get HTML of current document
 app.get('/doc/get/:docid/:uid', function (req, res) {
   let docId = req.params.docId;
-  if (docId in docVersions && users_of_docs.get(docId).has(req.params.uid)) {
-    let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
-    doc.fetch((err) => {
-      if (doc.type == null)
-      return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
+  let doc = docConnections.has(docId) ? docConnections.get(docId) : connection.get('docs', docId);
+  doc.fetch((err) => {
+    if (doc.type == null)
+    return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
-      const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
-      const html = converter.convert();
+    const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
+    const html = converter.convert();
 
-      res.set('Content-Type', 'text/html');
-      res.send(Buffer.from(html));
-    });
-  }
+    res.set('Content-Type', 'text/html');
+    res.send(Buffer.from(html));
+  });
 });
 
 // Presence

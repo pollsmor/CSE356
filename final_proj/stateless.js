@@ -48,8 +48,8 @@ const server = app.listen(3001, () => {
   console.log('Stateless services running on port 3001.');
 });
 
-// Distribute document IDs evenly
-const docInstances = 5; // 0-indexed, oops
+// Distribute document IDs evenly between doc instances
+const docInstances = 6; // 0-indexed, oops
 let docFirstDigit = 0;
 function randomStr() {
   let docId = (docFirstDigit++) + Math.random().toString(36).slice(2);
@@ -104,7 +104,7 @@ app.post('/users/signup', async function (req, res) {
     return res.json({ error: true, message: '[SIGN UP] Email already exists.' });
 
   // Create user
-  let key = randomStr();
+  let key = Math.random().toString(36).slice(2);
   let user = new User({
     name: req.body.name,
     email: email,
@@ -150,7 +150,7 @@ app.post('/collection/create', function (req, res) {
       } else {
         doc.create([], 'rich-text');
   
-        // Use another collection to store document info (for now, name)
+        // Use another collection to store document info (just the name sadge)
         let docinfo = new DocInfo({ docId: docId, name: req.body.name });
         docinfo.save();
         res.json({ docid: docId });
@@ -163,16 +163,13 @@ app.post('/collection/delete', function(req, res) {
   if (req.session.name) {
     let docId = req.body.docid;
     let doc = connection.get('docs', docId); // ShareDB document
+    doc.del((err) => {
+      if (err) 
+        return res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
 
-    doc.fetch((err) => {
-      if (doc.type == null) {
-        res.json({ error: true, message: '[DELETE DOC] Document does not exist.' });
-      } else {
-        DocInfo.deleteOne({ id: docId });
-        doc.del(); // Sets doc.type to null
-        doc.destroy(); // Removes doc object from memory
-        res.json({});
-      }
+      DocInfo.deleteOne({ id: docId });
+      doc.destroy() // Removes doc object from memory
+      res.json({});
     });
   } else res.json({ error: true, message: '[DELETE DOC] No session found.' });
 });

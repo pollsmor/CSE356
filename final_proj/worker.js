@@ -18,9 +18,9 @@ const connection = backend.connect();
 // Connect to Mongoose + models
 mongoose.connect(mongoUri, { useUnifiedTopology: true, useNewUrlParser: true });
 const DocInfo = require('./models/docinfo');
+const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 
 // Constants
-const store = new MongoDBStore({ uri: mongoUri, collection: 'sessions' });
 const docVersions = {};
 const users_of_docs = new Map();
 const streamHeaders = {
@@ -32,8 +32,8 @@ const streamHeaders = {
 
 // Middleware
 app.set('view engine', 'ejs');
-app.use('/doc/edit', express.static('public'));
 app.use(express.json({ limit: '10mb' }));
+app.use('/doc/edit', express.static('public'));
 app.use('/doc/edit', session({
   secret: 'secret',
   store: store,
@@ -49,7 +49,6 @@ const server = app.listen(80, () => {
 app.get('/doc/edit/:docid', async function (req, res) {
   let docId = req.params.docid;
 
-  // I query the DocInfo collection first because doc.del() doesn't actually delete in ShareDB.
   let docinfo = await DocInfo.findOne({ docId: docId }).lean();
   if (docinfo == null) { // Document does not exist
     res.json({ error: true, message: '[EDIT DOC] Document does not exist.' });
@@ -73,7 +72,7 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
   doc.subscribe((err) => {
     if (err) throw err;
     else if (doc.type == null)
-    return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
+      return res.json({ error: true, message: '[SETUP STREAM] Document does not exist.' });
 
     // Tie res object to doc
     if (users_of_docs.has(docId)) {
@@ -85,9 +84,8 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
     }
 
     // doc.version is too slow, store doc version on initial load of doc
-    if (!(docId in docVersions)) {
+    if (!(docId in docVersions))
       docVersions[docId] = doc.version;
-    }
 
     // Setup stream and provide initial document contents
     res.writeHead(200, streamHeaders);
@@ -114,7 +112,8 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
       if (users_of_doc.size === 0) {
         users_of_docs.delete(docId);
         setTimeout(() => { // Don't stop indexing immediately
-          if (users_of_doc.size === 0) // Check if another user connected during the 10s
+          // Check if another user connected during the 10s and if so, don't remove this
+          if (users_of_doc.size === 0)
             delete docVersions[docId];
         }, 10000);
       }
@@ -125,14 +124,12 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', function (req, res) {
   let docId = req.params.docid;
-  let uid = req.params.uid;
   let version = req.body.version;
-  let op = req.body.op;
 
   let doc = connection.get('docs', docId);
   if (version == docVersions[docId]) {
     docVersions[docId]++;
-    doc.submitOp(op, { source: uid }, (err) => {
+    doc.submitOp(req.body.op, { source: req.params.uid }, (err) => {
       if (err) throw err;
       res.json({ status: 'ok' });
     });
@@ -149,7 +146,7 @@ app.get('/doc/get/:docid/:uid', function (req, res) {
   let doc = connection.get('docs', docId);
   doc.fetch((err) => {
     if (doc.type == null)
-    return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
+      return res.json({ error: true, message: '[GET HTML] Document does not exist!' });
 
     const converter = new QuillDeltaToHtmlConverter(doc.data.ops, {});
     const html = converter.convert();

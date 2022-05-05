@@ -73,9 +73,7 @@ app.get('/index/search', async function (req, res) {
   let phrase = req.query.q;
   if (phrase == null) 
     return res.json({ error: true, message: '[SEARCH] Empty query string.' });
-
-  // Reuse cached results
-  if (searchCache.has(phrase))
+  else if (searchCache.has(phrase)) // Reuse cached results
     return res.json(searchCache.get(phrase));
 
   let results = await esClient.search({
@@ -93,7 +91,6 @@ app.get('/index/search', async function (req, res) {
       fields: { 
         contents: {},
       },
-      fragment_size: 200,
       order: 'score',
       type: 'fvh'   
     },
@@ -101,8 +98,7 @@ app.get('/index/search', async function (req, res) {
   });
 
   results = results.hits.hits;
-  let docIds = results.map((r) => {
-    return r._id;
+  let docIds = results.map(r => r._id);
   });
 
   let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
@@ -126,9 +122,7 @@ app.get('/index/suggest', async function (req, res) {
   let phrase = req.query.q;
   if (phrase == null) 
     return res.json({ error: true, message: '[SUGGEST] Empty query string.' });
-
-  // Reuse cached results
-  if (suggestCache.has(phrase))
+  else if (suggestCache.has(phrase)) // Reuse cached results
     return res.json(suggestCache.get(phrase));
 
   let results = await esClient.search({
@@ -145,40 +139,37 @@ app.get('/index/suggest', async function (req, res) {
     _source: false
   });
 
-  results = results.suggest.suggestion[0].options;
-
-  let output = results.map((r) => {
-    return r.text;
-  });
-
+  results = results.suggest.suggestion[0].options; // Parse returned JSON
+  let output = results.map(r => r.text);
   suggestCache.set(phrase, output);
   res.json(output);
 });
 
-app.post('/index/refresh', async function (req, res) {
-  let docIds = req.body.docIds;
+app.post('/index/refresh', function (req, res) {
+  // Fetch all relevant docs at once rather than one by one and using doc.fetch()
   connection.createFetchQuery('docs', {
-    _id: { $in: docIds }
+    _id: { $in: req.body.docIds }
   }, {}, async (err, results) => {
-    let relevantDocIds = [];
+    if (err) throw err;
+
+    let relevantDocIDs = [];
     let relevantDocData = [];
     for (let result of results) {
       relevantDocIds.push(result.id);
       relevantDocData.push(result.data.ops);
     }
 
-    let docinfos = await DocInfo.find({ docId: { $in: relevantDocIds }}).lean();
-    for (let i = 0; i < relevantDocIds.length; i++) {
+    let docinfos = await DocInfo.find({ docId: { $in: relevantDocIDs }}).lean();
+    for (let i = 0; i < relevantDocIDs.length; i++) {
       let converter = new QuillDeltaToHtmlConverter(relevantDocData[i], {});
       let html = convert(converter.convert()); // Convert converted HTML to text
-      let words = html.split(/\s+/); // Delimit by "spacey" characters
       await esClient.index({
         index: 'docs',
-        id: relevantDocIds[i],
+        id: relevantDocIDs[i],
         body: {
           docName: docinfos[i].name,
           contents: html,
-          suggest: words
+          suggest: html.split(/\s+/); // Delimit by "spacey" characters
         }
       });
     }

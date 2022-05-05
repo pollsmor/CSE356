@@ -123,9 +123,9 @@ app.get('/doc/connect/:docid/:uid', function (req, res) {
 
 // Submit Delta op to ShareDB and to other users
 app.post('/doc/op/:docid/:uid', function (req, res) {
-  if (!('op' in req.body) 
+  if (!('op' in req.body))
     return res.json({ error: true, message: '[SUBMIT OP] Undefined op not allowed!' });
-    
+
   let docId = req.params.docid;
   let version = req.body.version;
 

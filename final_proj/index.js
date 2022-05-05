@@ -99,7 +99,6 @@ app.get('/index/search', async function (req, res) {
 
   results = results.hits.hits;
   let docIds = results.map(r => r._id);
-  });
 
   let docinfos = await DocInfo.find({ docId: { $in: docIds }}).lean();
   let output = [];
@@ -169,7 +168,7 @@ app.post('/index/refresh', function (req, res) {
         body: {
           docName: docinfos[i].name,
           contents: html,
-          suggest: html.split(/\s+/); // Delimit by "spacey" characters
+          suggest: html.split(/\s+/) // Delimit by "spacey" characters
         }
       });
     }

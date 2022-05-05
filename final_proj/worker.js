@@ -181,7 +181,7 @@ app.post('/doc/presence/:docid/:uid', function(req, res) {
 // Index into Elasticsearch from time to time
 setInterval(() => {
   if (Object.keys(docVersions).length > 0) {
-    axios.post(`http://${process.env.MAIN_MACHINE}/index/refresh`, {
+    axios.post(`https://${process.env.MAIN_MACHINE}/index/refresh`, {
       docIds: Object.keys(docVersions)
     }).catch(err => {
       console.log(err);

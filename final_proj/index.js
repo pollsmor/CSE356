@@ -154,7 +154,7 @@ app.post('/index/refresh', function (req, res) {
     let relevantDocIDs = [];
     let relevantDocData = [];
     for (let result of results) {
-      relevantDocIds.push(result.id);
+      relevantDocIDs.push(result.id);
       relevantDocData.push(result.data.ops);
     }
 

@@ -49,7 +49,7 @@ const server = app.listen(3001, () => {
 });
 
 // Distribute document IDs evenly between doc instances
-const docInstances = 7; // 0-indexed, oops
+const docInstances = 8; // 0-indexed, oops
 let docFirstDigit = 0;
 function randomStr() {
   let docId = (docFirstDigit++) + Math.random().toString(36).slice(2);
